@@ -1,0 +1,6 @@
+# Copy this file to `android/key.properties` (NEVER commit `key.properties` or `.jks` files!).
+# See docs/release-signing-and-uat.md for keytool generation & GitHub Actions secrets setup.
+storePassword=REPLACE_WITH_KEYSTORE_PASSWORD
+keyPassword=REPLACE_WITH_KEY_PASSWORD
+keyAlias=gtrams-upload
+storeFile=upload-keystore.jks

@@ -1,0 +1,125 @@
+name: Build & Sign G-TRAMS Android Release APK
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: 'Backend API Origin URL'
+        required: false
+        default: 'https://g-trams-web2.onrender.com'
+
+jobs:
+  verify-and-build-apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter (3.38.7 stable)
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.7'
+          channel: stable
+          cache: true
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Static analysis (0 issues required)
+        run: flutter analyze
+
+      - name: Run full Unit, Widget & E2E UAT test suite
+        run: flutter test
+
+      - name: Verify Chrome Web preview compilation
+        run: flutter build web --no-pub --no-wasm-dry-run
+
+      - name: Verify OVM / LLSA I naming guardrail (zero user-facing legacy strings)
+        run: |
+          if grep -rnI --include="*.dart" -E '"[^"]*BPLO[^"]*"' lib/features/ lib/shared/; then
+            echo "::error::User-facing legacy office acronym found in UI layer. Use 'OVM — LLSA I' instead."
+            exit 1
+          fi
+          echo "OVM — LLSA I UI naming check passed."
+
+      - name: Decode Android Release Signing Keystore (when configured)
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/upload-keystore.jks
+            cat <<EOF > android/key.properties
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "Production release keystore configured."
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Release keystore secrets are not configured. Building with debug fallback signing for preview testing."
+          fi
+
+      - name: Build Universal Release APK
+        env:
+          API_URL: ${{ github.event.inputs.api_base_url || 'https://g-trams-web2.onrender.com' }}
+        run: |
+          flutter build apk --release \
+            --dart-define=API_BASE_URL="$API_URL"
+
+      - name: Build Split-per-ABI Release APKs (smaller operator downloads)
+        env:
+          API_URL: ${{ github.event.inputs.api_base_url || 'https://g-trams-web2.onrender.com' }}
+        run: |
+          flutter build apk --release --split-per-abi \
+            --dart-define=API_BASE_URL="$API_URL"
+
+      - name: Stage Release APKs & SHA-256 Checksums
+        run: |
+          mkdir -p release-dist
+          cp build/app/outputs/flutter-apk/app-release.apk release-dist/gtrams-mobile-universal-release.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk release-dist/gtrams-mobile-arm64-v8a-release.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk release-dist/gtrams-mobile-armeabi-v7a-release.apk
+          (cd release-dist && sha256sum *.apk > SHA256SUMS.txt)
+          cat release-dist/SHA256SUMS.txt
+
+      - name: Clean temporary keystore files
+        if: always()
+        run: rm -f android/upload-keystore.jks android/key.properties
+
+      - name: Upload Release APK Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtrams-mobile-release-apks
+          path: release-dist/*
+          retention-days: 30
+
+      - name: Publish GitHub Release on version tag (v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-dist/gtrams-mobile-universal-release.apk
+            release-dist/gtrams-mobile-arm64-v8a-release.apk
+            release-dist/gtrams-mobile-armeabi-v7a-release.apk
+            release-dist/SHA256SUMS.txt
+          generate_release_notes: true

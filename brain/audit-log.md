@@ -1,0 +1,28 @@
+# Audit & Verification Log
+
+| Date | Agent / Model | Check | Result |
+|---|---|---|---|
+| 2026-11-23 | Antigravity (model unspecified) | `flutter analyze` on `C:\Users\Hp\g-trams-mobile` | Passed — 0 issues found |
+| 2026-11-23 | Antigravity (model unspecified) | `flutter test` (`gasan_constants_test.dart` + `widget_test.dart`) | Passed — 12/12 tests passing (fixed responsive footer `Wrap` overflow caught during widget test) |
+| 2026-11-23 | Antigravity (model unspecified) | Native Android assets (`flutter_native_splash` + `flutter_launcher_icons`) | Passed — Light/Dark Android 12+ splash & adaptive Heritage Maroon launcher icons generated |
+| 2026-11-23 | Antigravity (model unspecified) | Parent isolation check (`git -C C:\Users\Hp\GTRAMS diff` & `status`) | Passed — 0 files modified or added in `C:\Users\Hp\GTRAMS` |
+| 2026-11-23 | Antigravity (Gemini) | Phase 2 `flutter analyze` on `C:\Users\Hp\g-trams-mobile` | Passed — 0 issues found |
+| 2026-11-23 | Antigravity (Gemini) | Phase 2 `flutter test` (`gasan_constants_test.dart`, `widget_test.dart`, `phase2_models_and_cache_test.dart`, `phase2_widgets_test.dart`) | Passed — 25/25 tests passing (includes Extra Large 1.26x Dark Mode 360px overflow test, 3D ID flip, MTOP/OR# E-Receipt, Violations, Withdraw, Voluntary Cancellation) |
+| 2026-11-23 | Antigravity (Gemini) | Phase 2 `flutter build web --no-pub` | Passed — Web preview compiles cleanly with `hive_flutter`, `qr_flutter`, and `file_picker` |
+| 2026-11-23 | Antigravity (Gemini) | Phase 2 OVM copy & parent isolation audit (`BPLO` grep + `git -C C:\Users\Hp\GTRAMS diff`) | Passed — 0 user-facing `BPLO` strings in `lib/`; 0 files modified or added in `C:\Users\Hp\GTRAMS` |
+| 2026-11-23 | Antigravity (Gemini) | Phase 3 `flutter analyze` on `C:\Users\Hp\g-trams-mobile` | Passed — 0 issues found |
+| 2026-11-23 | Antigravity (Gemini) | Phase 3 `flutter test` (all 4 test suites incl. `phase3_wizard_test.dart`) | Passed — 31/31 tests passing (RA 10173 OCR sanitizer, auto-fill + unique checks, Hive draft persistence/cleanup, Extra Large 1.26x Dark Mode 360px overflow check, Renewal flow) |
+| 2026-11-23 | Antigravity (Gemini) | Phase 3 `flutter build web --no-pub --no-wasm-dry-run` | Passed — Web preview compiles cleanly with conditional ML Kit stub (`mlkit_scanner_stub.dart`) |
+| 2026-11-23 | Antigravity (Gemini) | Phase 3 OVM copy & parent isolation check | Passed — 0 user-facing legacy strings in `lib/`; 0 files modified/added in `C:\Users\Hp\GTRAMS` |
+| 2026-11-24 | Antigravity (Gemini) | Phase 4 `flutter analyze` on `C:\Users\Hp\g-trams-mobile` | Passed — 0 issues found |
+| 2026-11-24 | Antigravity (Gemini) | Phase 4 `flutter test` (all 5 test suites incl. `phase4_toda_hub_test.dart`) | Passed — 36/36 tests passing (caught & fixed 1.26x divider overflow in `QrVerifierSection`; covers QR URL extraction, OCR scan/edit/upload, Add Member + Auto-Next Body#, Disaffiliation Removal 6-reason sheet, Extra Large 1.26x Dark Mode 360px overflow check) |
+| 2026-11-24 | Antigravity (Gemini) | Phase 4 `flutter build web --no-pub --no-wasm-dry-run` | Passed — Web preview compiles cleanly with conditional `mobile_scanner` stub (`qr_camera_scanner_stub.dart`) |
+| 2026-11-24 | Antigravity (Gemini) | Phase 4 OVM copy & parent isolation check | Passed — 0 user-facing legacy strings in `lib/`; 0 files modified/added in `C:\Users\Hp\GTRAMS` |
+| 2026-11-24 | Antigravity (Gemini) | Phase 5 `flutter analyze` on `C:\Users\Hp\g-trams-mobile` | Passed — 0 issues found |
+| 2026-11-24 | Antigravity (Gemini) | Phase 5 `flutter test` (all 6 test suites incl. `phase5_updates_and_settings_test.dart`) | Passed — 44/44 tests passing (caught & fixed global `CivicStatusBadge` 1.26x narrow overflow; verifies Socket.IO events + `session_revoked`, UpdatesHubTab & SettingsHubTab at 1.26x Dark Mode 360px, OTP Recovery, Change Password, Helpdesk Tickets, Document Vault) |
+| 2026-11-24 | Antigravity (Gemini) | Phase 5 `flutter build web --no-pub --no-wasm-dry-run` | Passed — Web preview compiles cleanly with `socket_io_client 3.1.6` |
+| 2026-11-24 | Antigravity (Gemini) | Phase 5 OVM copy & parent isolation check | Passed — 0 user-facing legacy strings in `lib/`; 0 files modified/added in `C:\Users\Hp\GTRAMS` |
+| 2026-11-24 | Antigravity (Gemini) | Phase 6 `flutter analyze` on `C:\Users\Hp\g-trams-mobile` | Passed — 0 issues found |
+| 2026-11-24 | Antigravity (Gemini) | Phase 6 `flutter test` (all 7 test suites incl. `phase6_e2e_uat_qa_test.dart`) | Passed — 49/49 tests passing (Staff Role Guard across all 3 blocked roles, Operator 4-tab 1.26x Dark Mode 360px E2E, TODA President 5-tab 360px E2E, Live Socket.IO `session_revoked` `/home` → `/login` redirect, Android Release Signing/R8/Manifest/CI invariants) |
+| 2026-11-24 | Antigravity (Gemini) | Phase 6 `flutter build web --no-pub --no-wasm-dry-run` | Passed — Web preview compiles cleanly (`√ Built build\web`) |
+| 2026-11-24 | Antigravity (Gemini) | Phase 6 Release Security, Secret Hygiene & Parent Isolation Audit | Passed — 0 user-facing legacy strings in UI (`lib/features/`, `lib/shared/`); 0 `.jks`/`.keystore`/`key.properties` files in repo; 0 files modified/added in `C:\Users\Hp\GTRAMS`; local Android SDK absent (verified via `flutter doctor -v`), GitHub Actions CI configured for signed Universal + Split-per-ABI Release APKs + `SHA256SUMS.txt` |

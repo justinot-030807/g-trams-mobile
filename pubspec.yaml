@@ -1,0 +1,59 @@
+name: gtrams_mobile
+description: "G-TRAMS Mobile — Dedicated Android companion app for Tricycle Operators & TODA Presidents of Gasan, Marinduque."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_riverpod: ^2.6.1
+  go_router: ^14.8.1
+  dio: ^5.8.0
+  flutter_secure_storage: ^9.2.4
+  shared_preferences: ^2.5.3
+  google_fonts: ^6.2.1
+  pinput: ^5.0.1
+  url_launcher: ^6.3.1
+  google_sign_in: ^6.3.0
+  local_auth: ^2.3.0
+  intl: ^0.20.2
+  hive_flutter: ^1.1.0
+  qr_flutter: ^4.1.0
+  file_picker: ^11.0.3
+  google_mlkit_document_scanner: ^0.5.0
+  image_picker: ^1.2.3
+  mobile_scanner: ^7.5.0
+  socket_io_client: ^3.1.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_native_splash: ^2.4.6
+  flutter_launcher_icons: ^0.14.3
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+
+flutter_native_splash:
+  color: "#F6F5F3"
+  color_dark: "#14110F"
+  image: assets/images/gasan-logo.png
+  android_12:
+    color: "#F6F5F3"
+    color_dark: "#14110F"
+    image: assets/images/gasan-logo.png
+  web: false
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/gasan-logo.png"
+  adaptive_icon_background: "#9E2A2B"
+  adaptive_icon_foreground: "assets/images/gasan-logo.png"
