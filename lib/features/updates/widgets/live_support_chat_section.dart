@@ -144,8 +144,8 @@ class _LiveSupportChatSectionState extends State<LiveSupportChatSection> {
                       const SizedBox(height: 2),
                       Text(
                         strings.pick(
-                          'Direct licensing desk & instant Tagalog FAQ replies',
-                          'Direktang tulong mula sa OVM — LLSA I at instant FAQ',
+                          'Licensing desk & instant FAQ replies',
+                          'Tulong mula sa OVM at instant FAQ',
                         ),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
@@ -214,8 +214,8 @@ class _LiveSupportChatSectionState extends State<LiveSupportChatSection> {
                         const SizedBox(height: 6),
                         Text(
                           strings.pick(
-                            'Ask about MTOP renewals, requirements, inspection schedules, or Municipal Cashier payments. Tap a quick question below to get an instant Tagalog guide.',
-                            'Magtanong tungkol sa MTOP renewal, requirements, o bayarin sa Municipal Cashier. Pumili ng tanong sa ibaba para sa agarang sagot.',
+                            'Ask about renewals, requirements, or cashier payments — or tap a quick question below.',
+                            'Magtanong tungkol sa renewal, requirements, o bayarin — o pumili ng tanong sa ibaba.',
                           ),
                           style: Theme.of(context)
                               .textTheme
@@ -268,7 +268,7 @@ class _LiveSupportChatSectionState extends State<LiveSupportChatSection> {
 
         // Quick Tagalog FAQ Chips
         SizedBox(
-          height: 44,
+          height: 48,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -403,13 +403,13 @@ class _ChatMessageBubble extends StatelessWidget {
             if (!isMine) ...[
               Text(
                 message.isAutoReply
-                    ? 'G-TRAMS AUTOMATED GUIDE'
-                    : message.sender.displayLabel.toUpperCase(),
-                style: CivicTheme.monoStyle(
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w700,
-                  color: palette.brandAccent,
-                ),
+                    ? 'G-TRAMS Guide'
+                    : message.sender.displayLabel,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: palette.brandAccent,
+                    ),
               ),
               const SizedBox(height: 4),
             ],

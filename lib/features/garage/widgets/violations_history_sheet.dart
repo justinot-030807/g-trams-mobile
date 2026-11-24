@@ -204,14 +204,10 @@ class _ViolationsHistorySheetState extends State<ViolationsHistorySheet> {
                   children: [
                     Text(
                       strings.pick(
-                        'RECORDED CITATIONS (${_data!.totalViolationsCount})',
-                        'MGA NAITALANG PAGLABAG (${_data!.totalViolationsCount})',
+                        'Recorded Citations (${_data!.totalViolationsCount})',
+                        'Mga Naitalang Paglabag (${_data!.totalViolationsCount})',
                       ),
-                      style: CivicTheme.monoStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: palette.muted,
-                      ),
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const Spacer(),
                     Text(
@@ -220,7 +216,7 @@ class _ViolationsHistorySheetState extends State<ViolationsHistorySheet> {
                         'Aktibo: ${_data!.activeViolationsCount}',
                       ),
                       style: CivicTheme.monoStyle(
-                        fontSize: 10.5,
+                        fontSize: 11,
                         fontWeight: FontWeight.w700,
                         color: _data!.activeViolationsCount > 0
                             ? CivicColors.crimsonAlert
@@ -262,8 +258,8 @@ class _ViolationsHistorySheetState extends State<ViolationsHistorySheet> {
             'Aktibong Babala (Unang Paglabag)',
           ),
           message: strings.pick(
-            'Your unit remains authorized to operate under warning. A second active offense escalates to temporary suspension and an administrative fine.',
-            'Maaari pa ring bumiyahe ang unit habang may babala. Ang ikalawang paglabag ay magreresulta sa suspensiyon at multa.',
+            'Unit remains authorized under warning. A 2nd active offense triggers suspension and a fine.',
+            'Maaari pa ring bumiyahe habang may babala. Ang ikalawang paglabag ay may suspensiyon at multa.',
           ),
         ),
         const SizedBox(height: 14),
@@ -282,8 +278,8 @@ class _ViolationsHistorySheetState extends State<ViolationsHistorySheet> {
             'Suspendido ang Prangkisa (Ikalawang Paglabag)$untilStr',
           ),
           message: strings.pick(
-            'Please visit the Office of the Municipal Vice Mayor (OVM) — LLSA I and settle your administrative fine at the Municipal Cashier to lift this suspension.',
-            'Pumunta sa Office of the Municipal Vice Mayor (OVM) — LLSA I at bayaran ang multa sa Municipal Cashier upang maalis ang suspensiyon.',
+            'Visit OVM — LLSA I and settle your fine at Municipal Cashier to lift this suspension.',
+            'Pumunta sa OVM — LLSA I at bayaran ang multa sa Municipal Cashier upang maalis ang suspensiyon.',
           ),
         ),
         const SizedBox(height: 14),
@@ -299,8 +295,8 @@ class _ViolationsHistorySheetState extends State<ViolationsHistorySheet> {
             'Binawi ang Prangkisa (Ikatlo / Mabigat na Paglabag)',
           ),
           message: strings.pick(
-            'This MTOP has been revoked by the Municipality of Gasan. Coordinate with the Office of the Municipal Vice Mayor (OVM) — LLSA I for formal inquiries.',
-            'Binawi na ng Munisipyo ng Gasan ang MTOP na ito. Makipag-ugnayan sa Office of the Municipal Vice Mayor (OVM) — LLSA I para sa katanungan.',
+            'Revoked by the Municipality of Gasan. Coordinate with OVM — LLSA I for inquiries.',
+            'Binawi na ng Munisipyo ng Gasan. Makipag-ugnayan sa OVM — LLSA I para sa katanungan.',
           ),
         ),
         const SizedBox(height: 14),

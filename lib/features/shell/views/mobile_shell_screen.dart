@@ -9,13 +9,11 @@ import 'package:gtrams_mobile/data/models/franchise_models.dart';
 import 'package:gtrams_mobile/features/application/view_models/franchise_wizard_controller.dart';
 import 'package:gtrams_mobile/features/application/views/apply_renew_wizard_tab.dart';
 import 'package:gtrams_mobile/features/auth/view_models/auth_controller.dart';
-import 'package:gtrams_mobile/features/garage/view_models/garage_controller.dart';
 import 'package:gtrams_mobile/features/garage/views/garage_dashboard_tab.dart';
 import 'package:gtrams_mobile/features/settings/views/settings_hub_tab.dart';
 import 'package:gtrams_mobile/features/toda/views/toda_governance_hub_tab.dart';
 import 'package:gtrams_mobile/features/updates/view_models/updates_controller.dart';
 import 'package:gtrams_mobile/features/updates/views/updates_hub_tab.dart';
-import 'package:gtrams_mobile/features/wallet/views/digital_wallet_sheet.dart';
 
 /// Role-Adaptive Shell (4 tabs for Operator, 5 tabs for TODA President):
 /// - Operator: Home | Apply | Updates | Settings
@@ -68,7 +66,6 @@ class _MobileShellScreenState extends ConsumerState<MobileShellScreen> {
     });
 
     final auth = ref.watch(authControllerProvider);
-    final garage = ref.watch(garageControllerProvider);
     final updates = ref.watch(updatesControllerProvider);
     final prefs = ref.watch(appPreferencesProvider);
     final strings = AppStrings(prefs.language);
@@ -171,7 +168,14 @@ class _MobileShellScreenState extends ConsumerState<MobileShellScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            Image.asset('assets/images/gasan-logo.png', width: 28, height: 28),
+            ClipOval(
+              child: Image.asset(
+                'assets/images/gtrams-logo.png',
+                width: 32,
+                height: 32,
+                fit: BoxFit.cover,
+              ),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -181,7 +185,7 @@ class _MobileShellScreenState extends ConsumerState<MobileShellScreen> {
                     'G-TRAMS',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w800,
-                          letterSpacing: 1.6,
+                          letterSpacing: 1.4,
                           color: palette.brandAccent,
                         ),
                   ),
@@ -224,23 +228,6 @@ class _MobileShellScreenState extends ConsumerState<MobileShellScreen> {
                 Icons.notifications_outlined,
                 color: palette.brandAccent,
               ),
-            ),
-          ),
-          IconButton(
-            tooltip: strings.digitalWalletTitle,
-            onPressed: () {
-              showDigitalWalletSheet(
-                context,
-                user: garage.cachedUser ?? user,
-                units: garage.franchises,
-                strings: strings,
-                lastSyncedAt: garage.lastSyncedAt,
-                isOfflineFallback: garage.isOfflineFallback,
-              );
-            },
-            icon: Icon(
-              Icons.badge_outlined,
-              color: palette.brandAccent,
             ),
           ),
           IconButton(

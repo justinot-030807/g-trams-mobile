@@ -155,18 +155,20 @@ class RosterOcrSection extends StatelessWidget {
             children: [
               Text(
                 strings.pick(
-                  'AI OCR ROSTER MASTERLIST SCANNER',
-                  'AI OCR SCANNER NG TODA MASTERLIST',
+                  'Roster Scanner',
+                  'Scanner ng TODA Roster',
                 ),
-                style: CivicTheme.monoStyle(fontSize: 10, color: palette.muted),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 strings.pick(
-                  'Scan a printed/handwritten TODA roster sheet or upload JPG, PNG, PDF, Excel (.xlsx), or CSV (<= 15 MB) for automatic extraction.',
-                  'I-scan ang nakalimbag o sulat-kamay na TODA roster o mag-upload ng JPG, PNG, PDF, Excel (.xlsx), o CSV (<= 15 MB) para sa awtomatikong pagkuha ng pangalan.',
+                  'Scan or upload a roster photo, PDF, Excel, or CSV (max 15 MB).',
+                  'I-scan o i-upload ang roster photo, PDF, Excel, o CSV (max 15 MB).',
                 ),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.45),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.4),
               ),
               const SizedBox(height: 12),
 
@@ -326,14 +328,12 @@ class RosterOcrSection extends StatelessWidget {
                     Expanded(
                       child: Text(
                         strings.pick(
-                          'EXTRACTED ROSTER EDITOR (${state.rosterMembers.length})',
-                          'EDITOR NG ROSTER (${state.rosterMembers.length})',
+                          'Extracted Members (${state.rosterMembers.length})',
+                          'Mga Nakuha (${state.rosterMembers.length})',
                         ),
-                        style: CivicTheme.monoStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
-                          color: palette.muted,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                       ),
                     ),
                     TextButton.icon(
@@ -394,7 +394,7 @@ class RosterOcrSection extends StatelessWidget {
                                   spacing: 10,
                                   children: [
                                     Text(
-                                      'BODY: ${row.bodyNumber.isNotEmpty ? '#${row.bodyNumber}' : '—'}',
+                                      'Body ${row.bodyNumber.isNotEmpty ? '#${row.bodyNumber}' : '—'}',
                                       style: CivicTheme.monoStyle(
                                         fontSize: 10.5,
                                         color: palette.brandAccent,
@@ -402,7 +402,7 @@ class RosterOcrSection extends StatelessWidget {
                                     ),
                                     if (row.plateNo.isNotEmpty)
                                       Text(
-                                        'PLATE: ${row.plateNo}',
+                                        row.plateNo,
                                         style: CivicTheme.monoStyle(
                                           fontSize: 10.5,
                                           color: palette.muted,
@@ -462,18 +462,17 @@ class RosterOcrSection extends StatelessWidget {
         ],
 
         // 3. Historical Submissions Tracker (`GET /toda/my-submissions`)
+        const SizedBox(height: 6),
         Text(
           strings.pick(
-            'PAST ROSTER SUBMISSIONS (${state.submissions.length})',
-            'MGA NAISUMITENG ROSTER (${state.submissions.length})',
+            'Past Submissions (${state.submissions.length})',
+            'Mga Naisumiteng Roster (${state.submissions.length})',
           ),
-          style: CivicTheme.monoStyle(
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            color: palette.muted,
-          ),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         if (state.submissions.isEmpty)
           CivicCard(
             child: Text(

@@ -436,6 +436,9 @@ void main() {
         // Operator gets 4 tabs (Home, Apply, Updates, Settings) — NO TODA tab
         expect(find.byType(NavigationDestination), findsNWidgets(4));
         expect(find.text('REGISTERED OPERATOR'), findsOneWidget);
+        // Digital ID is removed from AppBar & GarageDashboardTab
+        expect(find.byIcon(Icons.badge_outlined), findsNothing);
+        expect(find.byKey(const Key('hero_digital_id_button')), findsNothing);
 
         // Tap AppBar Notification Bell -> opens Updates -> Alerts
         await tester.tap(find.byKey(const Key('appbar_notifications_button')));
@@ -447,10 +450,14 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('FIL'), findsOneWidget);
 
-        // Switch to Settings tab
+        // Switch to Settings tab -> Digital ID & Wallet card is prominently available here
         await tester.tap(find.byIcon(Icons.settings_outlined));
         await tester.pumpAndSettle();
         expect(find.text('Juan Dela Cruz'), findsOneWidget);
+        expect(
+          find.byKey(const Key('settings_open_wallet_button')),
+          findsOneWidget,
+        );
 
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pumpAndSettle();
@@ -522,7 +529,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('BATODA'), findsOneWidget);
-        expect(find.text('TODA PRESIDENT CONSOLE'), findsOneWidget);
+        expect(find.text('TODA President Console'), findsOneWidget);
 
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pumpAndSettle();

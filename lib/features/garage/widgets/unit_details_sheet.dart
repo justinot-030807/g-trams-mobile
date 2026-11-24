@@ -117,8 +117,8 @@ class _UnitDetailsSheetBody extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      strings.pick('FRANCHISE & VEHICLE LEDGER', 'TALAAN NG PRANGKISA AT SASAKYAN'),
-                      style: CivicTheme.monoStyle(fontSize: 10, color: palette.muted),
+                      strings.pick('Franchise & Vehicle', 'Prangkisa at Sasakyan'),
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 10),
                     _SpecRow(label: strings.plateNumberLabel, value: unit.plateNo.isNotEmpty ? unit.plateNo : 'PENDING', mono: true),
@@ -154,8 +154,8 @@ class _UnitDetailsSheetBody extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      strings.pick('OPERATOR & TREASURY INFO', 'OPERATOR AT TREASURY'),
-                      style: CivicTheme.monoStyle(fontSize: 10, color: palette.muted),
+                      strings.pick('Operator & Payment', 'Operator at Bayad'),
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 10),
                     _SpecRow(label: strings.pick('Operator', 'Operator'), value: unit.fullName),
@@ -184,8 +184,8 @@ class _UnitDetailsSheetBody extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      strings.pick('ATTACHED REQUIREMENTS', 'NAKALAKIP NA DOKUMENTO'),
-                      style: CivicTheme.monoStyle(fontSize: 10, color: palette.muted),
+                      strings.pick('Submitted Documents', 'Mga Dokumento'),
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 10),
                     ...docs.map(

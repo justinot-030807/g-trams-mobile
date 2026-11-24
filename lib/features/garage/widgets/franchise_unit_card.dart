@@ -57,71 +57,30 @@ class FranchiseUnitCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row: TODA + Zone pills + Status Badge
+          // Header Row: TODA + Zone metadata + Status Badge
           Wrap(
             spacing: 8,
-            runSpacing: 8,
+            runSpacing: 6,
             alignment: WrapAlignment.spaceBetween,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: palette.canvas,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: palette.border),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.groups_outlined,
-                            size: 13,
-                            color: palette.brandAccent,
-                          ),
-                          const SizedBox(width: 5),
-                          Flexible(
-                            child: Text(
-                              unit.todaName.isNotEmpty
-                                  ? unit.todaName
-                                  : 'NON-TODA',
-                              overflow: TextOverflow.ellipsis,
-                              style: CivicTheme.monoStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
-                                color: palette.ink,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  Icon(
+                    Icons.groups_outlined,
+                    size: 15,
+                    color: palette.brandAccent,
                   ),
                   const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: palette.canvas,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: palette.border),
-                    ),
+                  Flexible(
                     child: Text(
-                      unit.formattedZone.toUpperCase(),
-                      style: CivicTheme.monoStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: palette.muted,
-                      ),
+                      '${unit.todaName.isNotEmpty ? unit.todaName : 'Non-TODA'} · ${unit.formattedZone}',
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: palette.ink,
+                          ),
                     ),
                   ),
                 ],
@@ -154,11 +113,11 @@ class FranchiseUnitCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            strings.plateNumberLabel,
-                            style: CivicTheme.monoStyle(
-                              fontSize: 9.5,
-                              color: palette.muted,
-                            ),
+                            strings.pick('Plate No.', 'Plaka'),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  fontSize: 11.5,
+                                  color: palette.muted,
+                                ),
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -169,7 +128,7 @@ class FranchiseUnitCard extends StatelessWidget {
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
                               color: palette.ink,
-                              letterSpacing: 0.8,
+                              letterSpacing: 0.6,
                             ),
                           ),
                         ],
@@ -180,33 +139,23 @@ class FranchiseUnitCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: palette.surface,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: palette.border),
-                            ),
-                            child: Text(
-                              (unit.make.isNotEmpty ? unit.make : 'TRICYCLE')
-                                  .toUpperCase(),
-                              overflow: TextOverflow.ellipsis,
-                              style: CivicTheme.monoStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
-                                color: palette.ink,
-                              ),
-                            ),
+                          Text(
+                            unit.make.isNotEmpty ? unit.make : 'Tricycle',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
                           ),
                           if (unit.made.isNotEmpty) ...[
-                            const SizedBox(height: 3),
+                            const SizedBox(height: 2),
                             Text(
-                              unit.made.toUpperCase(),
+                              unit.made,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: CivicTheme.monoStyle(
-                                fontSize: 10,
+                                fontSize: 11,
                                 color: palette.muted,
                               ),
                             ),
@@ -223,7 +172,7 @@ class FranchiseUnitCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: _LedgerMiniCell(
-                        label: strings.mtopNumberLabel,
+                        label: strings.pick('MTOP No.', 'MTOP #'),
                         value: unit.displayMtopNo.isNotEmpty
                             ? unit.displayMtopNo
                             : strings.pick('Pending', 'Wala pa'),
@@ -232,7 +181,7 @@ class FranchiseUnitCard extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _LedgerMiniCell(
-                        label: strings.bodyNumberShort,
+                        label: strings.pick('Body #', 'Body #'),
                         value: unit.bodyNumber.isNotEmpty
                             ? '#${unit.bodyNumber}'
                             : '—',
@@ -358,12 +307,12 @@ class FranchiseUnitCard extends StatelessWidget {
           tone: CivicStatusTone.inProgress,
           icon: Icons.warning_amber_rounded,
           title: strings.pick(
-            '1st Offense Notice — Active Under Warning',
-            'Unang Paalala — Aktibo Ngunit May Babala',
+            '1st Offense — Active Warning',
+            'Unang Babala — Aktibo',
           ),
           message: strings.pick(
-            'An official municipal warning is active on this unit. Tap Violations to review citation details and avoid suspension.',
-            'May aktibong opisyal na babala ang unit na ito. Pindutin ang Mga Paglabag upang makita ang detalye at maiwasan ang suspensiyon.',
+            'Tap Violations to review this notice and avoid suspension.',
+            'Pindutin ang Mga Paglabag upang makita ang detalye ng babala.',
           ),
         ),
       );
@@ -377,14 +326,14 @@ class FranchiseUnitCard extends StatelessWidget {
           tone: CivicStatusTone.danger,
           icon: Icons.gpp_maybe_outlined,
           title: strings.pick(
-            'Franchise Suspended — 2nd Offense$untilStr',
-            'Suspendido ang Prangkisa — Ikalawang Paglabag$untilStr',
+            'Suspended — 2nd Offense$untilStr',
+            'Suspendido — Ikalawang Paglabag$untilStr',
           ),
           message: unit.suspensionReason.isNotEmpty
-              ? '${unit.suspensionReason}. ${strings.pick('Visit OVM — LLSA I and settle the fine at the Municipal Cashier to lift suspension.', 'Pumunta sa OVM — LLSA I at bayaran ang multa sa Municipal Cashier upang maalis ang suspensiyon.')}'
+              ? '${unit.suspensionReason}. ${strings.pick('Settle the fine at Municipal Cashier via OVM — LLSA I.', 'Bayaran ang multa sa Municipal Cashier sa tulong ng OVM — LLSA I.')}'
               : strings.pick(
-                  'Operations are temporarily suspended. Visit the Office of the Municipal Vice Mayor (OVM) — LLSA I to settle the fine.',
-                  'Pansamantalang suspendido ang operasyon. Makipag-ugnayan sa Office of the Municipal Vice Mayor (OVM) — LLSA I.',
+                  'Temporarily suspended. Coordinate with OVM — LLSA I to settle the fine.',
+                  'Pansamantalang suspendido. Makipag-ugnayan sa OVM — LLSA I.',
                 ),
         ),
       );
@@ -395,14 +344,14 @@ class FranchiseUnitCard extends StatelessWidget {
           tone: CivicStatusTone.danger,
           icon: Icons.block_rounded,
           title: strings.pick(
-            'Franchise Permanently Revoked',
-            'Permanenteng Binawi ang Prangkisa',
+            'Franchise Revoked',
+            'Binawi ang Prangkisa',
           ),
           message: unit.cancelReason.isNotEmpty
               ? unit.cancelReason
               : strings.pick(
-                  'This MTOP has been revoked due to accumulated offenses or a grave municipal ordinance violation.',
-                  'Binawi ang MTOP na ito dahil sa paulit-ulit o mabigat na paglabag sa ordinansa ng munisipyo.',
+                  'Revoked due to accumulated or grave ordinance violations.',
+                  'Binawi dahil sa paulit-ulit o mabigat na paglabag sa ordinansa.',
                 ),
         ),
       );
@@ -413,12 +362,12 @@ class FranchiseUnitCard extends StatelessWidget {
           tone: CivicStatusTone.inProgress,
           icon: Icons.hourglass_bottom_rounded,
           title: strings.pick(
-            'Voluntary Cancellation Under OVM Review',
-            'Sinusuri ng OVM ang Kahilingang Pagkansela',
+            'Cancellation Under OVM Review',
+            'Sinusuri ng OVM ang Pagkansela',
           ),
           message: strings.pick(
-            'Your formal surrender letter has been submitted to the Office of the Municipal Vice Mayor (OVM) — LLSA I. No Cashier payment is required.',
-            'Natanggap na ng Office of the Municipal Vice Mayor (OVM) — LLSA I ang iyong liham ng pagsuko ng prangkisa. Walang bayarin sa Cashier.',
+            'Surrender letter received by OVM — LLSA I. No Cashier payment needed.',
+            'Natanggap ng OVM — LLSA I ang iyong liham. Walang bayarin sa Cashier.',
           ),
         ),
       );
@@ -433,11 +382,11 @@ class FranchiseUnitCard extends StatelessWidget {
             tone: CivicStatusTone.danger,
             icon: Icons.error_outline_rounded,
             title: strings.pick(
-              'Application Returned — Action Needed',
-              'Ibinalik ang Aplikasyon — Kailangan Ayusin',
+              'Returned — Action Needed',
+              'Ibinalik — Kailangan Ayusin',
             ),
             message:
-                '${unit.cancelReason.isNotEmpty ? unit.cancelReason : strings.pick('Please correct the flagged remarks and resubmit.', 'Pakitama ang mga nabanggit na kulang at isumite muli.')}$fieldChip',
+                '${unit.cancelReason.isNotEmpty ? unit.cancelReason : strings.pick('Correct the flagged remarks and resubmit.', 'Pakitama ang mga nabanggit na kulang at isumite muli.')}$fieldChip',
           ),
         );
       } else {
@@ -448,8 +397,8 @@ class FranchiseUnitCard extends StatelessWidget {
             : (unit.cancelReason.isNotEmpty
                 ? unit.cancelReason
                 : strings.pick(
-                    'Application withdrawn by operator.',
-                    'Na-withdraw ng operator ang aplikasyon.',
+                    'Withdrawn by operator.',
+                    'Na-withdraw ng operator.',
                   ));
         final dateStr = ManilaDateFormatter.formatShortDate(
           unit.cancellationDetails?.reviewedAt ??
@@ -467,8 +416,8 @@ class FranchiseUnitCard extends StatelessWidget {
                     'Kusang Ipinakansela ($dateStr)',
                   )
                 : strings.pick(
-                    'Application Withdrawn ($dateStr)',
-                    'Na-withdraw na Aplikasyon ($dateStr)',
+                    'Withdrawn ($dateStr)',
+                    'Na-withdraw ($dateStr)',
                   ),
             message: reasonText,
           ),
@@ -494,7 +443,10 @@ class _LedgerMiniCell extends StatelessWidget {
       children: [
         Text(
           label,
-          style: CivicTheme.monoStyle(fontSize: 9.5, color: palette.muted),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: 11.5,
+                color: palette.muted,
+              ),
         ),
         const SizedBox(height: 2),
         Text(
@@ -588,18 +540,17 @@ class _ValidityCountdownBox extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.calendar_today_outlined, size: 13, color: fg),
+              Icon(Icons.calendar_today_outlined, size: 14, color: fg),
               const SizedBox(width: 6),
               Text(
-                strings.validUntilLabel,
-                style: CivicTheme.monoStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: fg,
-                ),
+                strings.pick('Valid until', 'Balido hanggang'),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: fg,
+                    ),
               ),
-              const Spacer(),
-              Flexible(
+              const SizedBox(width: 8),
+              Expanded(
                 child: Text(
                   ManilaDateFormatter.formatLongDate(
                     expDate,
@@ -608,7 +559,7 @@ class _ValidityCountdownBox extends StatelessWidget {
                   textAlign: TextAlign.end,
                   overflow: TextOverflow.ellipsis,
                   style: CivicTheme.monoStyle(
-                    fontSize: 11,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                     color: fg,
                   ),
@@ -616,27 +567,14 @@ class _ValidityCountdownBox extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  countdownLabel,
-                  style: CivicTheme.monoStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: fg,
-                  ),
-                ),
-              ),
-              Text(
-                'PHT',
-                style: CivicTheme.monoStyle(
-                  fontSize: 9.5,
-                  color: fg.withValues(alpha: 0.75),
-                ),
-              ),
-            ],
+          const SizedBox(height: 6),
+          Text(
+            countdownLabel,
+            style: CivicTheme.monoStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: fg,
+            ),
           ),
           const SizedBox(height: 7),
           ClipRRect(

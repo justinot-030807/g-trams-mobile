@@ -317,10 +317,13 @@ class _VoluntaryCancellationSheetState
                 tone: CivicStatusTone.danger,
                 icon: Icons.gavel_outlined,
                 title: strings.pick(
-                  'Formal Surrender Notice',
-                  'Opisyal na Abiso ng Pagsuko ng Prangkisa',
+                  'Surrender Notice',
+                  'Abiso ng Pagsuko ng Prangkisa',
                 ),
-                message: strings.voluntaryCancelNotice,
+                message: strings.pick(
+                  'Sets your franchise to "Cancellation Requested" for OVM — LLSA I review. No Cashier payment needed.',
+                  'Ilalagay ang prangkisa sa "Cancellation Requested" para sa pagsusuri ng OVM — LLSA I. Walang bayarin.',
+                ),
               ),
 
               if (_error != null) ...[

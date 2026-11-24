@@ -14,7 +14,6 @@ import 'package:gtrams_mobile/features/garage/widgets/unit_details_sheet.dart';
 import 'package:gtrams_mobile/features/garage/widgets/violations_history_sheet.dart';
 import 'package:gtrams_mobile/features/garage/widgets/voluntary_cancellation_sheet.dart';
 import 'package:gtrams_mobile/features/garage/widgets/withdraw_application_sheet.dart';
-import 'package:gtrams_mobile/features/wallet/views/digital_wallet_sheet.dart';
 import 'package:gtrams_mobile/features/wallet/views/mtop_ecopy_receipt_sheet.dart';
 import 'package:gtrams_mobile/shared/widgets/civic_widgets.dart';
 
@@ -40,17 +39,6 @@ class GarageDashboardTab extends ConsumerWidget {
     final strings = AppStrings(prefs.language);
     final palette = context.civic;
     final effectiveUser = garage.cachedUser ?? user;
-
-    void openWallet() {
-      showDigitalWalletSheet(
-        context,
-        user: effectiveUser,
-        units: garage.franchises,
-        strings: strings,
-        lastSyncedAt: garage.lastSyncedAt,
-        isOfflineFallback: garage.isOfflineFallback,
-      );
-    }
 
     void openECopy(FranchiseRecord unit, {int initialTab = 0}) {
       showMtopECopyReceiptSheet(
@@ -153,25 +141,28 @@ class GarageDashboardTab extends ConsumerWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
         children: [
-          // 1. Heritage Operator Header + Quick Offline Digital Wallet Trigger
+          // 1. Clean Heritage Operator Header (Digital ID lives in Settings)
           _OperatorHeroCard(
             user: effectiveUser,
             strings: strings,
             lastSyncedAt: garage.lastSyncedAt,
             isOfflineFallback: garage.isOfflineFallback,
-            isRefreshing: garage.isRefreshing,
-            onOpenWallet: openWallet,
           ),
           const SizedBox(height: 12),
 
-          // 2. Offline Fallback Banner (when cached Hive data is displayed offline)
+          // 2. Offline Fallback Banner (shown only when offline cache is active)
           if (garage.isOfflineFallback) ...[
             CivicBanner(
               tone: CivicStatusTone.inProgress,
               icon: Icons.cloud_off_rounded,
-              title: strings.offlineModeBannerTitle,
-              message:
-                  '${strings.offlineModeBannerBody}\n${strings.lastSyncedLabel}: ${ManilaDateFormatter.formatSyncTimestamp(garage.lastSyncedAt, isFil: strings.isFil)}',
+              title: strings.pick(
+                'Offline Mode Active',
+                'Offline Mode — Naka-save na Data',
+              ),
+              message: strings.pick(
+                'Showing cached records. Pull down to refresh once online.',
+                'Ipinapakita ang huling na-sync na rekord. Mag-pull down kapag may signal.',
+              ),
               action: TextButton.icon(
                 onPressed: () => controller.loadGarage(isPullToRefresh: true),
                 icon: const Icon(Icons.refresh_rounded, size: 16),
@@ -181,18 +172,26 @@ class GarageDashboardTab extends ConsumerWidget {
             const SizedBox(height: 12),
           ],
 
-          // 3. Unit Quota Bar (activeCount / maxUnitsPerOperator)
-          _UnitQuotaCard(
+          // 3. Unified Fleet Quota & Quick-Apply Card
+          _FleetQuotaCard(
             occupiedCount: garage.slotOccupyingCount,
             maxUnits: garage.maxUnits,
             franchiseFee: garage.settings.franchiseFee,
             isLoading: garage.isLoading,
+            showQuickApply: !garage.isLoading &&
+                !hasBlockingError &&
+                garage.hasAvailableSlot &&
+                garage.priorityActionUnit == null &&
+                garage.franchises.isNotEmpty,
             strings: strings,
+            onApplyNew: () => onNavigateToApply(),
           ),
-          const SizedBox(height: 12),
 
-          // 4. Priority LGU Action Callout (only after initial load)
-          if (!garage.isLoading && !hasBlockingError) ...[
+          // 4. Urgent LGU Action Callout (only when a unit actually needs attention)
+          if (!garage.isLoading &&
+              !hasBlockingError &&
+              garage.priorityActionUnit != null) ...[
+            const SizedBox(height: 12),
             _PriorityActionCard(
               garage: garage,
               strings: strings,
@@ -200,28 +199,20 @@ class GarageDashboardTab extends ConsumerWidget {
               onOpenViolations: openViolations,
               onNavigateToApply: onNavigateToApply,
             ),
-            const SizedBox(height: 16),
           ],
 
-          // 5. Garage Section Header
+          const SizedBox(height: 20),
+
+          // 5. Clean Garage Section Header (title + unit count pill)
           Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      strings.garageTitle,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      strings.garageSubtitle,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
+                child: Text(
+                  strings.garageTitle,
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -231,9 +222,9 @@ class GarageDashboardTab extends ConsumerWidget {
                   border: Border.all(color: palette.border),
                 ),
                 child: Text(
-                  '${garage.franchises.length} ${strings.pick('UNITS', 'UNIT')}',
+                  '${garage.franchises.length} ${strings.pick(garage.franchises.length == 1 ? 'unit' : 'units', 'unit')}',
                   style: CivicTheme.monoStyle(
-                    fontSize: 10.5,
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: palette.ink,
                   ),
@@ -241,7 +232,7 @@ class GarageDashboardTab extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
           // 6. Filter Tabs (All / Active / In-Progress / Past & Archived)
           _GarageFilterBar(
@@ -316,107 +307,46 @@ class _OperatorHeroCard extends StatelessWidget {
     required this.strings,
     required this.lastSyncedAt,
     required this.isOfflineFallback,
-    required this.isRefreshing,
-    required this.onOpenWallet,
   });
 
   final MobileUser user;
   final AppStrings strings;
   final DateTime? lastSyncedAt;
   final bool isOfflineFallback;
-  final bool isRefreshing;
-  final VoidCallback onOpenWallet;
 
   @override
   Widget build(BuildContext context) {
     final greeting = ManilaDateFormatter.manilaGreeting(isFil: strings.isFil);
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       decoration: BoxDecoration(
         color: CivicColors.gasanMaroonDeep,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: CivicColors.gasanGold.withValues(alpha: 0.55),
+          color: CivicColors.gasanGold.withValues(alpha: 0.5),
           width: 1.2,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      greeting.toUpperCase(),
-                      style: CivicTheme.monoStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: CivicColors.gasanGoldAccessible,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      user.name.isNotEmpty ? user.name : 'Operator',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: CivicColors.purePaper,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                  ],
+          Text(
+            greeting,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: CivicColors.gasanGoldAccessible,
+                  fontWeight: FontWeight.w600,
                 ),
-              ),
-              const SizedBox(width: 10),
-              // Quick Offline Digital Operator ID Wallet Trigger (48dp touch height)
-              Material(
-                color: CivicColors.gasanGold.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(10),
-                child: InkWell(
-                  key: const Key('hero_digital_id_button'),
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: onOpenWallet,
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 48),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: CivicColors.gasanGold.withValues(alpha: 0.65),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.badge_outlined,
-                          size: 18,
-                          color: CivicColors.gasanGoldAccessible,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          strings.digitalWalletButton,
-                          style: CivicTheme.monoStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: CivicColors.gasanGoldAccessible,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 3),
+          Text(
+            user.name.isNotEmpty ? user.name : 'Operator',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: CivicColors.purePaper,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 10),
           Wrap(
             spacing: 12,
             runSpacing: 6,
@@ -425,24 +355,21 @@ class _OperatorHeroCard extends StatelessWidget {
                 icon: Icons.groups_outlined,
                 label: user.todaAssociation.isNotEmpty
                     ? user.todaAssociation
-                    : 'NON-TODA',
+                    : 'Non-TODA',
               ),
               if (user.bodyNumber.isNotEmpty)
                 _HeroMetaChip(
                   icon: Icons.tag_rounded,
-                  label: 'BODY #${user.bodyNumber}',
+                  label: 'Body #${user.bodyNumber}',
                 ),
-              _HeroMetaChip(
-                icon: isOfflineFallback
-                    ? Icons.cloud_off_rounded
-                    : Icons.offline_pin_outlined,
-                label: isRefreshing
-                    ? strings.pick('Syncing...', 'Nagsi-sync...')
-                    : ManilaDateFormatter.formatSyncTimestamp(
-                        lastSyncedAt,
-                        isFil: strings.isFil,
-                      ),
-              ),
+              if (isOfflineFallback)
+                _HeroMetaChip(
+                  icon: Icons.cloud_off_rounded,
+                  label: ManilaDateFormatter.formatSyncTimestamp(
+                    lastSyncedAt,
+                    isFil: strings.isFil,
+                  ),
+                ),
             ],
           ),
         ],
@@ -462,15 +389,15 @@ class _HeroMetaChip extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 13, color: CivicColors.gasanGoldAccessible),
+        Icon(icon, size: 14, color: CivicColors.gasanGoldAccessible),
         const SizedBox(width: 5),
         Flexible(
           child: Text(
             label,
             overflow: TextOverflow.ellipsis,
             style: CivicTheme.monoStyle(
-              fontSize: 10.5,
-              color: CivicColors.purePaper.withValues(alpha: 0.92),
+              fontSize: 11,
+              color: CivicColors.purePaper.withValues(alpha: 0.94),
             ),
           ),
         ),
@@ -479,20 +406,24 @@ class _HeroMetaChip extends StatelessWidget {
   }
 }
 
-class _UnitQuotaCard extends StatelessWidget {
-  const _UnitQuotaCard({
+class _FleetQuotaCard extends StatelessWidget {
+  const _FleetQuotaCard({
     required this.occupiedCount,
     required this.maxUnits,
     required this.franchiseFee,
     required this.isLoading,
+    required this.showQuickApply,
     required this.strings,
+    required this.onApplyNew,
   });
 
   final int occupiedCount;
   final int maxUnits;
   final num franchiseFee;
   final bool isLoading;
+  final bool showQuickApply;
   final AppStrings strings;
+  final VoidCallback onApplyNew;
 
   @override
   Widget build(BuildContext context) {
@@ -501,7 +432,7 @@ class _UnitQuotaCard extends StatelessWidget {
     final remaining = (safeMax - occupiedCount).clamp(0, safeMax);
 
     return CivicCard(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(15),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -509,19 +440,18 @@ class _UnitQuotaCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  strings.unitQuotaTitle,
-                  style: CivicTheme.monoStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: palette.muted,
-                  ),
+                  strings.pick('Franchise Slots', 'Slot ng Prangkisa'),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
               ),
+              const SizedBox(width: 8),
               Text(
-                '$occupiedCount / $safeMax ${strings.pick('UNITS', 'UNIT')}',
+                '$occupiedCount / $safeMax ${strings.pick('units', 'unit')}',
                 key: const Key('unit_quota_ratio_text'),
                 style: CivicTheme.monoStyle(
-                  fontSize: 12.5,
+                  fontSize: 13,
                   fontWeight: FontWeight.w800,
                   color: palette.brandAccent,
                 ),
@@ -534,7 +464,7 @@ class _UnitQuotaCard extends StatelessWidget {
               final filled = !isLoading && idx < occupiedCount;
               return Expanded(
                 child: Container(
-                  height: 8,
+                  height: 7,
                   margin: EdgeInsets.only(right: idx == safeMax - 1 ? 0 : 6),
                   decoration: BoxDecoration(
                     color: filled ? palette.brandAccent : palette.canvas,
@@ -547,7 +477,7 @@ class _UnitQuotaCard extends StatelessWidget {
               );
             }),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 9),
           Wrap(
             spacing: 12,
             runSpacing: 4,
@@ -563,14 +493,26 @@ class _UnitQuotaCard extends StatelessWidget {
                     ),
               ),
               Text(
-                '${strings.franchiseFeeLabel}: ${ManilaDateFormatter.formatPhp(franchiseFee)}',
+                '${strings.pick('Fee', 'Bayad')}: ${ManilaDateFormatter.formatPhp(franchiseFee)}',
                 style: CivicTheme.monoStyle(
-                  fontSize: 10.5,
+                  fontSize: 11,
                   color: palette.muted,
                 ),
               ),
             ],
           ),
+          if (showQuickApply) ...[
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              key: const Key('fleet_quick_apply_button'),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+              ),
+              onPressed: onApplyNew,
+              icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+              label: Text(strings.applyNewAction),
+            ),
+          ],
         ],
       ),
     );
@@ -596,29 +538,7 @@ class _PriorityActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final target = garage.priorityActionUnit;
-    if (target == null) {
-      if (!garage.hasAvailableSlot) return const SizedBox.shrink();
-      return CivicBanner(
-        tone: CivicStatusTone.neutral,
-        icon: Icons.add_circle_outline_rounded,
-        title: strings.pick(
-          'Franchise Slot Available',
-          'May Bakanteng Slot ng Prangkisa',
-        ),
-        message: strings.pick(
-          'You may register up to ${garage.maxUnits} tricycle units under Municipal Ordinance Section 4.',
-          'Maaari kang magparehistro ng hanggang ${garage.maxUnits} tricycle alinsunod sa Municipal Ordinance Section 4.',
-        ),
-        action: ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            minimumSize: const Size(double.infinity, 48),
-          ),
-          onPressed: () => onNavigateToApply(),
-          icon: const Icon(Icons.add_circle_outline_rounded, size: 17),
-          label: Text(strings.applyNewAction),
-        ),
-      );
-    }
+    if (target == null) return const SizedBox.shrink();
 
     if (target.status == 'For Payment') {
       return CivicBanner(
@@ -629,8 +549,8 @@ class _PriorityActionCard extends StatelessWidget {
           'Kailangan Magbayad — ${target.plateNo}',
         ),
         message: strings.pick(
-          'Pay ${ManilaDateFormatter.formatPhp(garage.settings.franchiseFee)} at the Municipal Cashier / Treasury window so OVM can route your MTOP for signing.',
-          'Magbayad ng ${ManilaDateFormatter.formatPhp(garage.settings.franchiseFee)} sa Municipal Cashier / Treasury upang mai-endorso sa lagdaan.',
+          'Pay ${ManilaDateFormatter.formatPhp(garage.settings.franchiseFee)} at Municipal Cashier to proceed to signing.',
+          'Magbayad ng ${ManilaDateFormatter.formatPhp(garage.settings.franchiseFee)} sa Municipal Cashier para sa lagdaan.',
         ),
         action: TextButton.icon(
           onPressed: () => onOpenDetails(target),
@@ -645,12 +565,12 @@ class _PriorityActionCard extends StatelessWidget {
         tone: CivicStatusTone.active,
         icon: Icons.assignment_turned_in_outlined,
         title: strings.pick(
-          'MTOP Signed & Ready for Pickup — ${target.plateNo}',
-          'Handa na para Kunin ang MTOP — ${target.plateNo}',
+          'Ready for Pickup — ${target.plateNo}',
+          'Handa nang Kunin — ${target.plateNo}',
         ),
         message: strings.pick(
-          'Claim your official printed MTOP certificate and stickers at the Office of the Municipal Vice Mayor (OVM) — LLSA I.',
-          'Kunin ang printed MTOP certificate at sticker sa Office of the Municipal Vice Mayor (OVM) — LLSA I.',
+          'Claim your printed MTOP and stickers at OVM — LLSA I.',
+          'Kunin ang printed MTOP at sticker sa OVM — LLSA I.',
         ),
         action: TextButton.icon(
           onPressed: () => onOpenDetails(target),
@@ -665,14 +585,14 @@ class _PriorityActionCard extends StatelessWidget {
         tone: CivicStatusTone.danger,
         icon: Icons.build_circle_outlined,
         title: strings.pick(
-          'Application Needs Attention — ${target.plateNo}',
-          'Kailangan Ayusin ang Aplikasyon — ${target.plateNo}',
+          'Action Needed — ${target.plateNo}',
+          'Kailangan Ayusin — ${target.plateNo}',
         ),
         message: target.cancelReason.isNotEmpty
             ? target.cancelReason
             : strings.pick(
-                'Review OVM — LLSA I remarks and submit corrected details.',
-                'Suriin ang puna ng OVM — LLSA I at isumite muli ang tamang detalye.',
+                'Review OVM — LLSA I remarks and resubmit.',
+                'Suriin ang puna ng OVM — LLSA I at isumite muli.',
               ),
         action: ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
@@ -699,8 +619,8 @@ class _PriorityActionCard extends StatelessWidget {
           'Suspendido ang Unit — ${target.plateNo}',
         ),
         message: strings.pick(
-          'Review your 2nd Offense citation and coordinate with OVM — LLSA I & Municipal Treasury.',
-          'Tingnan ang detalye ng 2nd Offense at makipag-ugnayan sa OVM — LLSA I at Municipal Treasury.',
+          'Review your citation and coordinate with OVM — LLSA I.',
+          'Tingnan ang paglabag at makipag-ugnayan sa OVM — LLSA I.',
         ),
         action: TextButton.icon(
           onPressed: () => onOpenViolations(target),
@@ -723,12 +643,12 @@ class _PriorityActionCard extends StatelessWidget {
                 'Nag-expire na ang Prangkisa — ${target.plateNo}',
               )
             : strings.pick(
-                'Renewal Window Open — ${target.plateNo}',
+                'Renewal Open — ${target.plateNo}',
                 'Bukas na ang Renewal — ${target.plateNo}',
               ),
         message: strings.pick(
-          'Renew your MTOP promptly to stay road-authorized and avoid late penalties.',
-          'I-renew agad ang iyong MTOP upang manatiling awtorisado at makaiwas sa multa.',
+          'Renew your MTOP promptly to avoid late penalties.',
+          'I-renew agad ang MTOP upang makaiwas sa multa.',
         ),
         action: ElevatedButton.icon(
           style: ElevatedButton.styleFrom(

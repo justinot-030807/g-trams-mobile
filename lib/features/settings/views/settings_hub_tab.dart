@@ -255,31 +255,116 @@ class SettingsHubTab extends ConsumerWidget {
       key: const Key('settings_hub_list'),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
-        // 1. Identity Header Card
+        // 1. Operator Profile Header
         CivicCard(
           padding: const EdgeInsets.all(16),
-          child: Column(
+          child: Row(
             children: [
-              Row(
+              CircleAvatar(
+                radius: 26,
+                backgroundColor: CivicColors.gasanMaroon,
+                backgroundImage: user.profilePic.isNotEmpty
+                    ? NetworkImage(user.profilePic)
+                    : null,
+                child: user.profilePic.isEmpty
+                    ? Text(
+                        user.name.isNotEmpty
+                            ? user.name[0].toUpperCase()
+                            : 'O',
+                        style: const TextStyle(
+                          color: CivicColors.purePaper,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 20,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.name,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      user.contact.isNotEmpty ? user.contact : user.email,
+                      style: CivicTheme.monoStyle(
+                        fontSize: 11,
+                        color: palette.muted,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        CivicStatusBadge(
+                          label: user.roleDisplayTitle,
+                          tone: CivicStatusTone.active,
+                        ),
+                        if (user.todaAssociation.isNotEmpty)
+                          CivicStatusBadge(
+                            label:
+                                '${user.todaAssociation}${user.bodyNumber.isNotEmpty ? ' #${user.bodyNumber}' : ''}',
+                            tone: CivicStatusTone.neutral,
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // 2. Prominent Digital Operator ID & Offline Wallet Card (moved here from Dashboard/AppBar)
+        Material(
+          color: CivicColors.gasanMaroonDeep,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            key: const Key('settings_open_wallet_button'),
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => showDigitalWalletSheet(
+              context,
+              user: garage.cachedUser ?? user,
+              units: garage.franchises,
+              strings: strings,
+              lastSyncedAt: garage.lastSyncedAt,
+              isOfflineFallback: garage.isOfflineFallback,
+            ),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 74),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: CivicColors.gasanGold.withValues(alpha: 0.65),
+                  width: 1.2,
+                ),
+              ),
+              child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor: CivicColors.gasanMaroon,
-                    backgroundImage: user.profilePic.isNotEmpty
-                        ? NetworkImage(user.profilePic)
-                        : null,
-                    child: user.profilePic.isEmpty
-                        ? Text(
-                            user.name.isNotEmpty
-                                ? user.name[0].toUpperCase()
-                                : 'O',
-                            style: const TextStyle(
-                              color: CivicColors.purePaper,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 22,
-                            ),
-                          )
-                        : null,
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: CivicColors.gasanGold.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: CivicColors.gasanGold.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.qr_code_2_rounded,
+                      size: 24,
+                      color: CivicColors.gasanGoldAccessible,
+                    ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -287,87 +372,68 @@ class SettingsHubTab extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          user.name,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          user.contact.isNotEmpty ? user.contact : user.email,
-                          style: CivicTheme.monoStyle(
-                            fontSize: 11,
-                            color: palette.muted,
+                          strings.pick(
+                            'Digital Operator ID & Wallet',
+                            'Digital Operator ID at Wallet',
                           ),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: CivicColors.purePaper,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                         ),
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: [
-                            CivicStatusBadge(
-                              label: user.roleDisplayTitle,
-                              tone: CivicStatusTone.active,
-                            ),
-                            if (user.todaAssociation.isNotEmpty)
-                              CivicStatusBadge(
-                                label:
-                                    '${user.todaAssociation}${user.bodyNumber.isNotEmpty ? ' #${user.bodyNumber}' : ''}',
-                                tone: CivicStatusTone.neutral,
+                        const SizedBox(height: 3),
+                        Text(
+                          strings.pick(
+                            'LGU QR ID, MTOP E-Copy & receipts · Offline ready',
+                            'LGU QR ID, MTOP E-Copy at resibo · Handa offline',
+                          ),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: CivicColors.gasanGoldAccessible,
+                                fontWeight: FontWeight.w500,
                               ),
-                          ],
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: CivicColors.gasanGold.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 18,
+                      color: CivicColors.gasanGoldAccessible,
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 14),
-              Divider(height: 1, color: palette.border),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  key: const Key('settings_open_wallet_button'),
-                  onPressed: () => showDigitalWalletSheet(
-                    context,
-                    user: garage.cachedUser ?? user,
-                    units: garage.franchises,
-                    strings: strings,
-                    lastSyncedAt: garage.lastSyncedAt,
-                    isOfflineFallback: garage.isOfflineFallback,
-                  ),
-                  icon: const Icon(Icons.badge_outlined, size: 18),
-                  label: Text(strings.digitalWalletTitle),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 20),
 
-        // 2. Account & Security
+        // 3. Account & Security
+        _SettingsSectionHeader(
+          title: strings.pick('Account & Security', 'Account at Seguridad'),
+        ),
+        const SizedBox(height: 8),
         CivicCard(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 6),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                child: Text(
-                  'ACCOUNT & SECURITY',
-                  style: CivicTheme.monoStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    color: palette.muted,
-                  ),
-                ),
-              ),
               _SettingsActionTile(
                 tileKey: const Key('settings_edit_profile_tile'),
                 icon: Icons.person_outline_rounded,
                 title: strings.editProfileTitle,
                 subtitle: strings.pick(
-                  'Name, address, emergency contact & ID photo',
-                  'Pangalan, tirahan, emergency contact at larawan',
+                  'Name, address & photo',
+                  'Pangalan, tirahan at larawan',
                 ),
                 onTap: openEditProfile,
               ),
@@ -378,12 +444,12 @@ class SettingsHubTab extends ConsumerWidget {
                 title: strings.accountRecoveryTitle,
                 subtitle: user.hasAnyRecoveryContact
                     ? strings.pick(
-                        'Backup channel configured',
-                        'May naka-set na backup recovery contact',
+                        'Backup contact configured',
+                        'May naka-set na recovery contact',
                       )
                     : strings.pick(
-                        'Add backup email or PH mobile via OTP',
-                        'Magdagdag ng backup email o mobile gamit ang OTP',
+                        'Add backup email or mobile',
+                        'Magdagdag ng backup email o mobile',
                       ),
                 trailingBadge: user.hasAnyRecoveryContact
                     ? const CivicStatusBadge(
@@ -402,7 +468,7 @@ class SettingsHubTab extends ConsumerWidget {
                 icon: Icons.lock_outline_rounded,
                 title: strings.changePasswordTitle,
                 subtitle: strings.pick(
-                  'Update login password & sign out other devices',
+                  'Update password & sign out other devices',
                   'Palitan ang password at i-sign out ang ibang device',
                 ),
                 onTap: openChangePassword,
@@ -410,32 +476,25 @@ class SettingsHubTab extends ConsumerWidget {
             ],
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 20),
 
-        // 3. Records & Support
+        // 4. Records & Helpdesk
+        _SettingsSectionHeader(
+          title: strings.pick('Records & Support', 'Rekord at Tulong'),
+        ),
+        const SizedBox(height: 8),
         CivicCard(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 6),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                child: Text(
-                  'RECORDS & HELPDESK',
-                  style: CivicTheme.monoStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    color: palette.muted,
-                  ),
-                ),
-              ),
               _SettingsActionTile(
                 tileKey: const Key('settings_document_vault_tile'),
                 icon: Icons.folder_copy_outlined,
                 title: strings.documentVaultTitle,
                 subtitle: strings.pick(
-                  'View stored OR/CR, License, Clearance & Cedula files',
-                  'Tingnan ang iyong OR/CR, Lisensya, Clearance at Cedula',
+                  'OR/CR, License, Clearance & Cedula',
+                  'OR/CR, Lisensya, Clearance at Cedula',
                 ),
                 trailingBadge: CivicStatusBadge(
                   label: '${vaultDocs.length}',
@@ -451,30 +510,28 @@ class SettingsHubTab extends ConsumerWidget {
                 icon: Icons.support_agent_outlined,
                 title: strings.helpdeskTitle,
                 subtitle: strings.pick(
-                  'Submit IT/support tickets & view OVM — LLSA I offices',
-                  'Magpadala ng support ticket at tingnan ang tanggapan ng OVM',
+                  'Support tickets & OVM — LLSA I offices',
+                  'Support ticket at tanggapan ng OVM',
                 ),
                 onTap: openHelpdesk,
               ),
             ],
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 20),
 
-        // 4. Display, Language & Accessibility
+        // 5. Display, Language & Accessibility
+        _SettingsSectionHeader(
+          title: strings.pick(
+            'Display & Accessibility',
+            'Display at Accessibility',
+          ),
+        ),
+        const SizedBox(height: 8),
         CivicCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'DISPLAY & ACCESSIBILITY',
-                style: CivicTheme.monoStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  color: palette.muted,
-                ),
-              ),
-              const SizedBox(height: 12),
               Text(
                 strings.pick('Theme', 'Tema'),
                 style: Theme.of(context).textTheme.titleMedium,
@@ -551,8 +608,8 @@ class SettingsHubTab extends ConsumerWidget {
                   ),
                   subtitle: Text(
                     strings.pick(
-                      'Require Fingerprint or Face ID when reopening app',
-                      'Gumamit ng Fingerprint o Face ID sa pagbukas ng app',
+                      'Use Fingerprint or Face ID when opening app',
+                      'Gamitin ang Fingerprint o Face ID sa pagbukas',
                     ),
                   ),
                   value: prefs.biometricEnabled,
@@ -564,11 +621,15 @@ class SettingsHubTab extends ConsumerWidget {
             ],
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 20),
 
-        // 5. Offline Storage & Cache
+        // 6. Offline Storage & Cache
+        _SettingsSectionHeader(
+          title: strings.pick('Offline Storage', 'Offline Storage'),
+        ),
+        const SizedBox(height: 8),
         CivicCard(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 6),
           child: _SettingsActionTile(
             tileKey: const Key('settings_clear_cache_tile'),
             icon: Icons.cleaning_services_outlined,
@@ -576,15 +637,15 @@ class SettingsHubTab extends ConsumerWidget {
             subtitle: garage.lastSyncedAt != null
                 ? '${strings.lastSynced}: ${ManilaDateFormatter.formatTimestamp(garage.lastSyncedAt, isFil: strings.isFil)}'
                 : strings.pick(
-                    'Clear cached offline wallet & saved drafts',
-                    'Burahin ang offline wallet cache at mga draft',
+                    'Clear cached wallet & saved drafts',
+                    'Burahin ang offline cache at mga draft',
                   ),
             onTap: clearOfflineCache,
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 18),
 
-        // 6. Sign Out
+        // 7. Sign Out
         OutlinedButton.icon(
           key: const Key('settings_sign_out_button'),
           icon: const Icon(Icons.logout_rounded, color: CivicColors.crimsonAlert),
@@ -599,6 +660,26 @@ class SettingsHubTab extends ConsumerWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+class _SettingsSectionHeader extends StatelessWidget {
+  const _SettingsSectionHeader({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: context.civic.ink,
+            ),
+      ),
     );
   }
 }

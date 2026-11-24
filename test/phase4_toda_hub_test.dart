@@ -302,7 +302,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('BATODA'), findsOneWidget);
-        expect(find.text('TODA PRESIDENT CONSOLE'), findsOneWidget);
+        expect(find.text('TODA President Console'), findsOneWidget);
 
         // Switch to QR Verify tab (scroll horizontal pill bar first on 360px 1.26x)
         final qrTab = find.byKey(const Key('toda_section_qrVerifier'));
