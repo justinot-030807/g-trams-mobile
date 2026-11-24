@@ -342,7 +342,7 @@ Future<void> showStaffRoleGuardDialog(
             ),
             const SizedBox(height: 8),
             Text(
-              'G-TRAMS Mobile is strictly for Tricycle Operators and TODA Presidents. Please sign in through the official G-TRAMS Web Portal for municipal office operations.',
+              'G-TRAMS Mobile is only for Tricycle Operators and TODA Presidents. Sign in on the G-TRAMS Web Portal for municipal staff operations.',
               style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
                     color: palette.muted,
                   ),
@@ -373,7 +373,7 @@ Future<void> showStaffRoleGuardDialog(
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              minimumSize: const Size(140, 44),
+              minimumSize: const Size(140, 48),
             ),
             onPressed: () async {
               final uri = Uri.parse(AppConfig.webPortalUrl);

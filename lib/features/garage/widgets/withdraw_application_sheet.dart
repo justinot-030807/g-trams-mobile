@@ -157,7 +157,10 @@ class _WithdrawApplicationSheetState extends State<WithdrawApplicationSheet> {
 
           CivicBanner(
             tone: CivicStatusTone.inProgress,
-            message: strings.withdrawAdvisory,
+            message: strings.pick(
+              'Only unpaid pending applications can be withdrawn. Your reason is logged with OVM — LLSA I.',
+              'Mga hindi pa bayad na aplikasyon lamang ang maaaring i-withdraw. Itatala ang dahilan sa OVM — LLSA I.',
+            ),
           ),
 
           if (_error != null) ...[

@@ -518,6 +518,11 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Juan Dela Cruz'), findsOneWidget);
+        expect(
+          find.byKey(const Key('settings_open_wallet_button')),
+          findsOneWidget,
+        );
+        expect(find.text('Digital Operator ID & Wallet'), findsOneWidget);
         expect(find.byKey(const Key('settings_edit_profile_tile')), findsOneWidget);
         expect(find.byKey(const Key('settings_recovery_tile')), findsOneWidget);
 

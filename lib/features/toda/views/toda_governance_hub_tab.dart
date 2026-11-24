@@ -91,104 +91,92 @@ class TodaGovernanceHubTab extends ConsumerWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
         children: [
-          // 1. Heritage Maroon TODA Governance Header
+          // 1. Clean Heritage Maroon TODA Governance Header
           Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
             decoration: BoxDecoration(
               color: CivicColors.gasanMaroonDeep,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: CivicColors.gasanGold.withValues(alpha: 0.55),
+                color: CivicColors.gasanGold.withValues(alpha: 0.5),
                 width: 1.2,
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'TODA PRESIDENT CONSOLE',
-                            style: CivicTheme.monoStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: CivicColors.gasanGoldAccessible,
-                              letterSpacing: 0.8,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        todaName.isNotEmpty ? todaName : 'TODA Association',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(
+                              color: CivicColors.purePaper,
+                              fontWeight: FontWeight.w800,
                             ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        strings.pick(
+                          'TODA President Console',
+                          'TODA President Console',
+                        ),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: CivicColors.gasanGoldAccessible,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Material(
+                  color: CivicColors.gasanGold.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    key: const Key('toda_add_member_hero_button'),
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: openAddMember,
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 48),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: CivicColors.gasanGold.withValues(alpha: 0.65),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.person_add_alt_1_outlined,
+                            size: 17,
+                            color: CivicColors.gasanGoldAccessible,
                           ),
-                          const SizedBox(height: 3),
+                          const SizedBox(width: 6),
                           Text(
-                            todaName.isNotEmpty ? todaName : 'TODA ASSOCIATION',
+                            strings.pick('Add', 'Dagdag'),
                             style: Theme.of(context)
                                 .textTheme
-                                .titleLarge
+                                .bodyMedium
                                 ?.copyWith(
-                                  color: CivicColors.purePaper,
-                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: CivicColors.gasanGoldAccessible,
                                 ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Material(
-                      color: CivicColors.gasanGold.withValues(alpha: 0.16),
-                      borderRadius: BorderRadius.circular(10),
-                      child: InkWell(
-                        key: const Key('toda_add_member_hero_button'),
-                        borderRadius: BorderRadius.circular(10),
-                        onTap: openAddMember,
-                        child: Container(
-                          constraints: const BoxConstraints(minHeight: 48),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: CivicColors.gasanGold.withValues(alpha: 0.65),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.person_add_alt_1_outlined,
-                                size: 17,
-                                color: CivicColors.gasanGoldAccessible,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                strings.pick('Add', 'Dagdag'),
-                                style: CivicTheme.monoStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  color: CivicColors.gasanGoldAccessible,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  strings.pick(
-                    'Manage accredited operators, AI OCR roster submissions, disaffiliation requests, and roadside QR verification.',
-                    'Pamahalaan ang mga miyembrong operator, AI OCR roster submission, pag-alis ng miyembro, at beripikasyon ng QR.',
                   ),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: CivicColors.purePaper.withValues(alpha: 0.86),
-                        height: 1.4,
-                      ),
                 ),
               ],
             ),
@@ -279,7 +267,7 @@ class _TodaKpiGrid extends StatelessWidget {
           children: [
             Expanded(
               child: _KpiTile(
-                label: strings.pick('MEMBERS', 'MIYEMBRO'),
+                label: strings.pick('Members', 'Miyembro'),
                 value: '${stats.totalMembers}',
                 color: palette.ink,
               ),
@@ -287,7 +275,7 @@ class _TodaKpiGrid extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: _KpiTile(
-                label: strings.pick('ACTIVE UNITS', 'AKTIBO'),
+                label: strings.pick('Active', 'Aktibo'),
                 value: '${stats.activeUnits}',
                 color: CivicColors.civicGreen,
               ),
@@ -299,7 +287,7 @@ class _TodaKpiGrid extends StatelessWidget {
           children: [
             Expanded(
               child: _KpiTile(
-                label: strings.pick('PENDING', 'NAKABINBIN'),
+                label: strings.pick('Pending', 'Nakabinbin'),
                 value: '${stats.pendingUnits}',
                 color: CivicColors.amberOchre,
               ),
@@ -307,7 +295,7 @@ class _TodaKpiGrid extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: _KpiTile(
-                label: strings.pick('EXPIRED', 'EXPIRED'),
+                label: strings.pick('Expired', 'Expired'),
                 value: '${stats.expiredUnits}',
                 color: CivicColors.crimsonAlert,
               ),
@@ -334,15 +322,18 @@ class _KpiTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.civic;
     return CivicCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: CivicTheme.monoStyle(fontSize: 9.5, color: palette.muted),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: palette.muted,
+                  fontWeight: FontWeight.w600,
+                ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           Text(
             value,
             style: CivicTheme.monoStyle(
@@ -518,8 +509,8 @@ class _MemberDirectorySection extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   strings.pick(
-                    'Add accredited members individually or scan your official TODA roster under the Roster OCR tab.',
-                    'Magdagdag ng miyembro nang isa-isa o i-scan ang opisyal na TODA roster sa tab na Roster OCR.',
+                    'Add members individually or scan a roster sheet under Roster OCR.',
+                    'Magdagdag ng miyembro o i-scan ang roster sa Roster OCR.',
                   ),
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall,
@@ -559,7 +550,7 @@ class _MemberDirectorySection extends StatelessWidget {
                                 runSpacing: 4,
                                 children: [
                                   Text(
-                                    'BODY: ${m.bodyNumber.isNotEmpty ? '#${m.bodyNumber}' : '—'}',
+                                    'Body ${m.bodyNumber.isNotEmpty ? '#${m.bodyNumber}' : '—'}',
                                     style: CivicTheme.monoStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
@@ -568,7 +559,7 @@ class _MemberDirectorySection extends StatelessWidget {
                                   ),
                                   if (m.primaryPlateNo.isNotEmpty)
                                     Text(
-                                      'PLATE: ${m.primaryPlateNo}',
+                                      m.primaryPlateNo,
                                       style: CivicTheme.monoStyle(
                                         fontSize: 11,
                                         color: palette.ink,
@@ -620,7 +611,7 @@ class _MemberDirectorySection extends StatelessWidget {
                         alignment: Alignment.centerRight,
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(0, 44),
+                            minimumSize: const Size(0, 48),
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             foregroundColor: CivicColors.crimsonAlert,
                             side: BorderSide(
@@ -673,8 +664,8 @@ class _RemovalsTrackerSection extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               strings.pick(
-                'No Member Removal Requests',
-                'Walang Kahilingang Pag-alis ng Miyembro',
+                'No Removal Requests',
+                'Walang Kahilingang Pag-alis',
               ),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium,
@@ -682,8 +673,8 @@ class _RemovalsTrackerSection extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               strings.pick(
-                'To request disaffiliation of an inactive or non-compliant operator, open the Members tab and tap Request Removal.',
-                'Upang humiling ng pag-alis ng miyembro, buksan ang tab na Miyembro at pindutin ang Hilingin ang Pag-alis.',
+                'Open the Members tab and tap Request Removal on any member.',
+                'Buksan ang tab na Miyembro at pindutin ang Hilingin ang Pag-alis.',
               ),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,

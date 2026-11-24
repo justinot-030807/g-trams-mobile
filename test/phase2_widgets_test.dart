@@ -154,6 +154,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // Digital ID button is moved exclusively to Settings (NOT on Dashboard)
+    expect(find.byKey(const Key('hero_digital_id_button')), findsNothing);
+    expect(find.byIcon(Icons.badge_outlined), findsNothing);
+
     // Unit Quota Bar shows 2 / 2
     expect(find.byKey(const Key('unit_quota_ratio_text')), findsOneWidget);
     expect(find.textContaining('2 / 2'), findsOneWidget);
@@ -187,6 +191,57 @@ void main() {
     expect(find.text('GTR-1001'), findsNothing);
     expect(find.text('GTR-2002'), findsOneWidget);
     expect(find.text('2/5'), findsOneWidget);
+  });
+
+  testWidgets(
+      'GarageDashboardTab unifies Fleet Quota & Quick-Apply card when a slot is open and hides Digital ID',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final cache = InMemoryOfflineWalletCache();
+    var applyTapped = false;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          offlineWalletCacheProvider.overrideWithValue(cache),
+          franchiseRepositoryProvider
+              .overrideWithValue(_StubFranchiseRepo([_activeUnit])),
+          settingsRepositoryProvider.overrideWithValue(_StubSettingsRepo()),
+          garageControllerProvider.overrideWith(
+            (ref) => GarageController(
+              franchiseRepository: _StubFranchiseRepo([_activeUnit]),
+              settingsRepository: _StubSettingsRepo(),
+              walletCache: cache,
+              user: _sampleUser,
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          theme: CivicTheme.light(),
+          home: Scaffold(
+            body: GarageDashboardTab(
+              user: _sampleUser,
+              onNavigateToApply: ({unit, actionLabel}) {
+                applyTapped = true;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('hero_digital_id_button')), findsNothing);
+    expect(find.text('Franchise Slot Available'), findsNothing);
+    expect(find.byKey(const Key('unit_quota_ratio_text')), findsOneWidget);
+    expect(find.textContaining('1 / 2'), findsOneWidget);
+    expect(find.byKey(const Key('fleet_quick_apply_button')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('fleet_quick_apply_button')));
+    await tester.pumpAndSettle();
+    expect(applyTapped, isTrue);
   });
 
   testWidgets('DigitalOperatorIdCard flips in 3D from front seal/info to back verification QR',

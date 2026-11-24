@@ -54,19 +54,17 @@ class LguPipelineStepper extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  strings.pipelineHeader,
-                  style: CivicTheme.monoStyle(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w700,
-                    color: palette.muted,
-                    letterSpacing: 0.6,
-                  ),
+                  strings.pick('Application Progress', 'Progreso ng Aplikasyon'),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: palette.ink,
+                      ),
                 ),
               ),
               Text(
                 '${currentIndex + 1}/5',
                 style: CivicTheme.monoStyle(
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: activeColor,
                 ),
@@ -187,34 +185,27 @@ class LguPipelineStepper extends StatelessWidget {
 
           if (stageGuidance != null) ...[
             const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: palette.surface,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: palette.border, width: 1),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    stageGuidance.$1,
-                    size: 16,
-                    color: stageGuidance.$2,
+            Divider(height: 1, color: palette.border),
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  stageGuidance.$1,
+                  size: 16,
+                  color: stageGuidance.$2,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    stageGuidance.$3,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: palette.ink,
+                          height: 1.38,
+                        ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      stageGuidance.$3,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: palette.ink,
-                            height: 1.38,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
         ],
@@ -232,8 +223,8 @@ class LguPipelineStepper extends StatelessWidget {
           Icons.hourglass_top_rounded,
           CivicColors.amberOchre,
           strings.pick(
-            'Under evaluation by Office of the Municipal Vice Mayor (OVM) — LLSA I$applied.',
-            'Sinusuri ng Office of the Municipal Vice Mayor (OVM) — LLSA I$applied.',
+            'Under review by OVM — LLSA I$applied.',
+            'Sinusuri ng OVM — LLSA I$applied.',
           ),
         );
       case LguPipelineStage.forPayment:
@@ -243,8 +234,8 @@ class LguPipelineStepper extends StatelessWidget {
             Icons.receipt_long_rounded,
             CivicColors.civicGreen,
             strings.pick(
-              'Paid at Municipal Treasury (OR# ${unit.officialReceiptNo}). Awaiting routing to signing.',
-              'Bayad na sa Municipal Treasury (OR# ${unit.officialReceiptNo}). Hinihintay ang pag-endorso para sa lagda.',
+              'Paid (OR# ${unit.officialReceiptNo}). Routing for signing.',
+              'Bayad na (OR# ${unit.officialReceiptNo}). Papunta na sa lagdaan.',
             ),
           );
         }
@@ -252,8 +243,8 @@ class LguPipelineStepper extends StatelessWidget {
           Icons.payments_outlined,
           CivicColors.amberOchre,
           strings.pick(
-            'Approved for payment! Pay $feeText at the Municipal Cashier / Treasury window with Plate ${unit.plateNo.isNotEmpty ? unit.plateNo : 'PENDING'}.',
-            'Aprubado para sa bayad! Magbayad ng $feeText sa Municipal Cashier / Treasury gamit ang Plaka ${unit.plateNo.isNotEmpty ? unit.plateNo : 'PENDING'}.',
+            'Pay $feeText at Municipal Cashier using Plate ${unit.plateNo.isNotEmpty ? unit.plateNo : 'PENDING'}.',
+            'Magbayad ng $feeText sa Municipal Cashier gamit ang Plaka ${unit.plateNo.isNotEmpty ? unit.plateNo : 'PENDING'}.',
           ),
         );
       case LguPipelineStage.forSigning:
@@ -264,8 +255,8 @@ class LguPipelineStepper extends StatelessWidget {
           Icons.draw_outlined,
           CivicColors.amberOchre,
           strings.pick(
-            'Treasury payment recorded$orNote. Documents are routing for OVM / Sangguniang Bayan signatures.',
-            'Naitala na ang bayad$orNote. Pinapipirmahan ang dokumento sa OVM / Sangguniang Bayan.',
+            'Payment recorded$orNote. Routing for OVM / Sangguniang Bayan signatures.',
+            'Naitala ang bayad$orNote. Pinapipirmahan sa OVM / Sangguniang Bayan.',
           ),
         );
       case LguPipelineStage.readyForPickup:
@@ -273,8 +264,8 @@ class LguPipelineStepper extends StatelessWidget {
           Icons.assignment_turned_in_outlined,
           CivicColors.civicGreen,
           strings.pick(
-            'MTOP signed! Claim your printed certificate and official stickers at the Office of the Municipal Vice Mayor (OVM) — LLSA I.',
-            'Nilagdaan na ang MTOP! Kunin ang printed certificate at sticker sa Office of the Municipal Vice Mayor (OVM) — LLSA I.',
+            'MTOP signed! Claim your printed permit and stickers at OVM — LLSA I.',
+            'Nilagdaan na ang MTOP! Kunin ang permit at sticker sa OVM — LLSA I.',
           ),
         );
       case LguPipelineStage.active:
