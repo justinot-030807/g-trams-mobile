@@ -162,6 +162,40 @@ class AuthController extends StateNotifier<AuthState> {
     return user;
   }
 
+  Future<MobileUser> completeGoogleOnboarding({
+    required String email,
+    required String fullName,
+    required String address,
+    required String todaAssociation,
+    required String bodyNumber,
+    String googleId = '',
+    String picture = '',
+    String onboardingToken = '',
+    String idToken = '',
+    String accessToken = '',
+    String? emergencyContact,
+  }) async {
+    final user = await _authRepo.completeGoogleOnboarding(
+      email: email,
+      fullName: fullName,
+      address: address,
+      todaAssociation: todaAssociation,
+      bodyNumber: bodyNumber,
+      googleId: googleId,
+      picture: picture,
+      onboardingToken: onboardingToken,
+      idToken: idToken,
+      accessToken: accessToken,
+      emergencyContact: emergencyContact,
+    );
+    state = state.copyWith(
+      status: AuthStatus.authenticated,
+      user: user,
+      clearRevokedReason: true,
+    );
+    return user;
+  }
+
   void setAuthenticatedUser(MobileUser user) {
     state = state.copyWith(
       status: AuthStatus.authenticated,

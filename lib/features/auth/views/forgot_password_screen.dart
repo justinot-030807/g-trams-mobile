@@ -68,10 +68,15 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     String? preferredChannel,
   }) async {
     if (_isLoading) return;
+    final strings = AppStrings(ref.read(appPreferencesProvider).language);
     final contact = _contactController.text.trim();
     if (!GasanConstants.isValidContact(contact)) {
-      setState(() =>
-          _errorMessage = 'Enter a valid registered email or mobile number.');
+      setState(() {
+        _errorMessage = strings.pick(
+          'Enter a valid registered email or mobile number.',
+          'Ilagay ang iyong rehistradong email o numero ng cellphone.',
+        );
+      });
       return;
     }
 
@@ -108,21 +113,36 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       _successMessage = null;
     });
 
+    final strings = AppStrings(ref.read(appPreferencesProvider).language);
     final otp = _otpController.text.trim();
     final newPass = _newPasswordController.text;
     final confirmPass = _confirmPasswordController.text;
 
     if (otp.length < 4) {
-      setState(() => _errorMessage = 'Enter the 6-digit recovery code.');
+      setState(() {
+        _errorMessage = strings.pick(
+          'Enter the 6-digit recovery code.',
+          'Ilagay ang 6-digit recovery code.',
+        );
+      });
       return;
     }
     if (!GasanConstants.isPasswordQualified(newPass)) {
-      setState(() =>
-          _errorMessage = 'New password must meet all 5 security rules.');
+      setState(() {
+        _errorMessage = strings.pick(
+          'New password must meet all 5 security rules.',
+          'Dapat matugunan ng bagong password ang lahat ng 5 panuntunan.',
+        );
+      });
       return;
     }
     if (newPass != confirmPass) {
-      setState(() => _errorMessage = 'Passwords do not match.');
+      setState(() {
+        _errorMessage = strings.pick(
+          'Passwords do not match.',
+          'Hindi magkatugma ang mga password.',
+        );
+      });
       return;
     }
 
@@ -181,14 +201,40 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    strings.resetPasswordSubtitle,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: palette.muted),
+                  Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: CivicColors.purePaper,
+                          border: Border.all(
+                            color: CivicColors.gasanGold,
+                            width: 1.4,
+                          ),
+                        ),
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/images/gtrams-logo.png',
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          strings.resetPasswordSubtitle,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: palette.muted),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 18),
 
                   if (_errorMessage != null) ...[
                     CivicBanner(
@@ -292,15 +338,18 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const CivicFieldLabel(
-                      text: 'New Password',
+                    CivicFieldLabel(
+                      text: strings.pick('New Password', 'Bagong Password'),
                       isRequired: true,
                     ),
                     TextField(
                       controller: _newPasswordController,
                       obscureText: !_showNewPassword,
                       decoration: InputDecoration(
-                        hintText: 'Create a strong new password',
+                        hintText: strings.pick(
+                          'Create a strong new password',
+                          'Gumawa ng malakas na bagong password',
+                        ),
                         prefixIcon:
                             const Icon(Icons.lock_outline_rounded, size: 20),
                         suffixIcon: IconButton(
@@ -385,7 +434,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                     ),
                     const SizedBox(height: 18),
                     CivicPrimaryButton(
-                      label: 'Update Password',
+                      label: strings.pick(
+                        'Update Password',
+                        'I-update ang Password',
+                      ),
                       icon: Icons.check_rounded,
                       isLoading: _isLoading,
                       onPressed: _submitReset,

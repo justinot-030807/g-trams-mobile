@@ -28,6 +28,7 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
 
   Future<void> _promptUnlock() async {
     if (_isAuthenticating) return;
+    final strings = AppStrings(ref.read(appPreferencesProvider).language);
     setState(() {
       _isAuthenticating = true;
       _error = null;
@@ -35,7 +36,12 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
 
     final ok = await ref
         .read(authControllerProvider.notifier)
-        .unlockWithBiometrics('Verify your identity to open G-TRAMS Mobile');
+        .unlockWithBiometrics(
+          strings.pick(
+            'Verify your identity to open G-TRAMS Mobile',
+            'I-verify ang iyong pagkakakilanlan para buksan ang G-TRAMS Mobile',
+          ),
+        );
 
     if (!mounted) return;
     setState(() => _isAuthenticating = false);
@@ -44,8 +50,10 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
       context.go('/home');
     } else {
       setState(() {
-        _error =
-            'Biometric verification did not complete. Try again or sign in with your password.';
+        _error = strings.pick(
+          'Biometric verification did not complete. Try again or sign in with your password.',
+          'Hindi natapos ang biometric check. Subukan muli o gumamit ng password.',
+        );
       });
     }
   }
@@ -73,18 +81,20 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
                     Container(
                       width: 84,
                       height: 84,
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: palette.canvas,
+                        color: CivicColors.purePaper,
                         border: Border.all(
                           color: CivicColors.gasanGold,
                           width: 1.6,
                         ),
                       ),
-                      child: Image.asset(
-                        'assets/images/gasan-logo.png',
-                        fit: BoxFit.contain,
+                      child: ClipOval(
+                        child: Image.asset(
+                          'assets/images/gtrams-logo.png',
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 18),
@@ -122,7 +132,12 @@ class _BiometricLockScreenState extends ConsumerState<BiometricLockScreen> {
                             .logout();
                         if (context.mounted) context.go('/login');
                       },
-                      child: const Text('Use Password Instead'),
+                      child: Text(
+                        strings.pick(
+                          'Use Password Instead',
+                          'Gumamit ng Password',
+                        ),
+                      ),
                     ),
                   ],
                 ),

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:gtrams_mobile/core/config/app_config.dart';
 import 'package:gtrams_mobile/core/constants/gasan_constants.dart';
@@ -8,6 +9,29 @@ import 'package:gtrams_mobile/core/network/api_client.dart';
 import 'package:gtrams_mobile/core/storage/secure_session_storage.dart';
 import 'package:gtrams_mobile/data/models/application_wizard_models.dart';
 import 'package:gtrams_mobile/data/models/auth_models.dart';
+
+/// Credentials returned by native Google Sign-In before server verification.
+class GoogleAuthCredentials {
+  const GoogleAuthCredentials({
+    required this.email,
+    this.name = '',
+    this.googleId = '',
+    this.picture = '',
+    this.idToken,
+    this.accessToken,
+  });
+
+  final String email;
+  final String name;
+  final String googleId;
+  final String picture;
+  final String? idToken;
+  final String? accessToken;
+}
+
+typedef GoogleSignInRunner = Future<GoogleAuthCredentials?> Function(
+  String serverClientId,
+);
 
 /// Result of `POST /api/v1/auth/request-recovery-otp`.
 class RecoveryOtpResult {
@@ -50,6 +74,9 @@ class GoogleOnboardingRequiredException implements Exception {
     required this.googleId,
     this.picture = '',
     this.onboardingToken = '',
+    this.idToken = '',
+    this.accessToken = '',
+    this.message = '',
   });
 
   final String email;
@@ -57,17 +84,29 @@ class GoogleOnboardingRequiredException implements Exception {
   final String googleId;
   final String picture;
   final String onboardingToken;
+  final String idToken;
+  final String accessToken;
+  final String message;
 }
 
 class AuthRepository {
   AuthRepository({
     required ApiClient apiClient,
     required SecureSessionStorage sessionStorage,
+    GoogleSignInRunner? googleSignInRunner,
+    bool? isWebOverride,
   })  : _api = apiClient,
-        _storage = sessionStorage;
+        _storage = sessionStorage,
+        _googleSignInRunner = googleSignInRunner,
+        _isWebOverride = isWebOverride;
 
   final ApiClient _api;
   final SecureSessionStorage _storage;
+  final GoogleSignInRunner? _googleSignInRunner;
+  final bool? _isWebOverride;
+  String? _cachedGoogleClientId;
+
+  bool get _isWeb => _isWebOverride ?? kIsWeb;
 
   Future<MobileUser> login({
     required String contact,
@@ -88,70 +127,307 @@ class AuthRepository {
     }
   }
 
-  Future<MobileUser> signInWithGoogle() async {
-    if (kIsWeb) {
+  /// Resolves the backend's active Web OAuth Client ID (`GOOGLE_CLIENT_ID`)
+  /// so Android `serverClientId` always matches server-side `id_token` `aud` checks.
+  Future<String> resolveGoogleClientId({bool forceRefresh = false}) async {
+    if (!forceRefresh &&
+        _cachedGoogleClientId != null &&
+        _cachedGoogleClientId!.isNotEmpty) {
+      return _cachedGoogleClientId!;
+    }
+    var serverClientId = AppConfig.defaultGoogleClientId.trim();
+    try {
+      final cfg = await _api.dio.get<Map<String, dynamic>>(
+        '/auth/google-client-id',
+        options: Options(
+          sendTimeout: const Duration(seconds: 8),
+          receiveTimeout: const Duration(seconds: 8),
+        ),
+      );
+      final body = cfg.data ?? const <String, dynamic>{};
+      final nested = body['data'] is Map
+          ? Map<String, dynamic>.from(body['data'] as Map)
+          : const <String, dynamic>{};
+      final fetched = (body['clientId'] ??
+              nested['clientId'] ??
+              body['googleClientId'] ??
+              nested['googleClientId'] ??
+              '')
+          .toString()
+          .trim();
+      if (fetched.isNotEmpty) {
+        serverClientId = fetched;
+        _cachedGoogleClientId = fetched;
+      }
+    } catch (_) {
+      // Fallback to AppConfig.defaultGoogleClientId when offline or cold-starting.
+    }
+    return serverClientId;
+  }
+
+  /// Maps Android/iOS `google_sign_in` `PlatformException` codes to clear,
+  /// actionable operator-facing messages.
+  static ApiException mapGooglePlatformException(PlatformException e) {
+    final code = e.code.trim().toLowerCase();
+    final combined = '${e.message ?? ''} ${e.details ?? ''}'.toLowerCase();
+
+    bool hasNumericCode(String target) =>
+        RegExp('(?:^|[^0-9])$target(?:[^0-9]|\$)').hasMatch(combined);
+
+    if (code == GoogleSignIn.kSignInCanceledError ||
+        code == 'canceled' ||
+        code == 'cancelled' ||
+        hasNumericCode('12501') ||
+        combined.contains('sign_in_cancelled') ||
+        combined.contains('sign_in_canceled')) {
+      return const ApiException(
+        message:
+            'Google sign-in was cancelled. Tap "Continue with Google" to choose your account.',
+      );
+    }
+
+    if (hasNumericCode('10') || combined.contains('developer_error')) {
+      return const ApiException(
+        message:
+            'Google Sign-In configuration mismatch (Error 10). Confirm this Android APK\'s SHA-1 fingerprint and OAuth Client ID are registered in Google Cloud Console.',
+      );
+    }
+
+    if (code == GoogleSignIn.kNetworkError ||
+        hasNumericCode('7') ||
+        combined.contains('network_error')) {
+      return const ApiException(
+        message:
+            'Network error during Google Sign-In. Check your internet connection and try again.',
+      );
+    }
+
+    if (hasNumericCode('12500')) {
+      return const ApiException(
+        message:
+            'Google Sign-In could not start (Error 12500). Update Google Play Services or confirm your Google account has access to this app.',
+      );
+    }
+
+    if (hasNumericCode('12502')) {
+      return const ApiException(
+        message:
+            'Google Sign-In is already in progress. Please wait a moment and try again.',
+      );
+    }
+
+    if (code == GoogleSignInAccount.kUserRecoverableAuthError ||
+        code == GoogleSignInAccount.kFailedToRecoverAuthError) {
+      return const ApiException(
+        message:
+            'Google account authorization did not finish. Please try signing in again.',
+      );
+    }
+
+    if (code == GoogleSignIn.kSignInFailedError) {
+      return const ApiException(
+        message:
+            'Google Sign-In failed on this device. Confirm Google Play Services is updated and Android SHA-1 / OAuth Client ID settings match the server.',
+      );
+    }
+
+    final cleanDetail = (e.message ?? '').trim();
+    if (cleanDetail.isNotEmpty &&
+        !cleanDetail.contains('com.google.android.gms')) {
+      return ApiException(message: cleanDetail);
+    }
+    return ApiException(
+      message: 'Google Sign-In failed (${e.code}). Please try again.',
+    );
+  }
+
+  /// Acquires fresh Google credentials on Android (clearing stale cached
+  /// sign-in sessions first to prevent silent-cancel loops).
+  Future<GoogleAuthCredentials> acquireGoogleCredentials() async {
+    if (_isWeb) {
       throw const ApiException(
         message:
             'Google Sign-In is configured for Android APK devices. Use email/phone login in Chrome preview.',
       );
     }
 
+    final serverClientId = await resolveGoogleClientId();
+
     try {
-      var serverClientId = AppConfig.defaultGoogleClientId;
-      try {
-        final cfg = await _api.dio.get<Map<String, dynamic>>('/auth/google-client-id');
-        final fetched = (cfg.data?['clientId'] ?? '').toString().trim();
-        if (fetched.isNotEmpty) serverClientId = fetched;
-      } catch (_) {
-        // Fallback to AppConfig.defaultGoogleClientId
+      GoogleAuthCredentials? creds;
+      if (_googleSignInRunner != null) {
+        creds = await _googleSignInRunner(serverClientId);
+      } else {
+        final googleSignIn = GoogleSignIn(
+          scopes: const ['email', 'profile'],
+          serverClientId: serverClientId,
+        );
+
+        // Clear any stale cached GoogleSignInClient session so Android opens
+        // a clean account picker and avoids silent-cancel loops.
+        try {
+          await googleSignIn.signOut();
+        } catch (_) {
+          // Ignore signOut errors prior to interactive signIn.
+        }
+
+        final account = await googleSignIn.signIn();
+        if (account != null) {
+          final auth = await account.authentication;
+          creds = GoogleAuthCredentials(
+            email: account.email,
+            name: account.displayName ?? '',
+            googleId: account.id,
+            picture: account.photoUrl ?? '',
+            idToken: auth.idToken,
+            accessToken: auth.accessToken,
+          );
+        }
       }
 
-      final googleSignIn = GoogleSignIn(
-        scopes: const ['email', 'profile', 'openid'],
-        serverClientId: serverClientId,
-      );
-
-      final account = await googleSignIn.signIn();
-      if (account == null) {
-        throw const ApiException(message: 'Google sign-in was cancelled.');
-      }
-
-      final auth = await account.authentication;
-      final idToken = auth.idToken;
-      final accessToken = auth.accessToken;
-
-      if ((idToken == null || idToken.isEmpty) &&
-          (accessToken == null || accessToken.isEmpty)) {
+      if (creds == null) {
         throw const ApiException(
           message:
-              'Unable to verify Google credentials. Confirm Android SHA-1 is registered in Google Cloud Console.',
+              'Google sign-in was cancelled. Tap "Continue with Google" to choose your account.',
         );
       }
+
+      final idToken = (creds.idToken ?? '').trim();
+      final accessToken = (creds.accessToken ?? '').trim();
+      if (idToken.isEmpty && accessToken.isEmpty) {
+        throw const ApiException(
+          message:
+              'Unable to verify Google credentials. Confirm this APK\'s Android SHA-1 and Web Client ID are registered in Google Cloud Console.',
+        );
+      }
+
+      return creds;
+    } on PlatformException catch (e) {
+      throw mapGooglePlatformException(e);
+    }
+  }
+
+  Future<MobileUser> signInWithGoogle() async {
+    try {
+      final creds = await acquireGoogleCredentials();
+      final idToken = (creds.idToken ?? '').trim();
+      final accessToken = (creds.accessToken ?? '').trim();
+      final email = creds.email.trim().toLowerCase();
 
       final res = await _api.dio.post<Map<String, dynamic>>(
         '/auth/google',
         data: {
-          if (idToken != null && idToken.isNotEmpty) 'idToken': idToken,
-          if (accessToken != null && accessToken.isNotEmpty)
-            'accessToken': accessToken,
+          if (idToken.isNotEmpty) 'idToken': idToken,
+          if (idToken.isNotEmpty) 'credential': idToken,
+          if (accessToken.isNotEmpty) 'accessToken': accessToken,
+          if (email.isNotEmpty) 'email': email,
+          'googleProfile': {
+            'email': email,
+            'name': creds.name.trim(),
+            'picture': creds.picture.trim(),
+            'googleId': creds.googleId.trim(),
+          },
         },
       );
 
-      final data = res.data ?? const <String, dynamic>{};
-      if (data['needsOnboarding'] == true) {
-        final profile = data['googleProfile'] is Map<String, dynamic>
-            ? data['googleProfile'] as Map<String, dynamic>
-            : const <String, dynamic>{};
-        throw GoogleOnboardingRequiredException(
-          email: (profile['email'] ?? account.email).toString(),
-          name: (profile['name'] ?? account.displayName ?? '').toString(),
-          googleId: (profile['googleId'] ?? account.id).toString(),
-          picture: (profile['picture'] ?? account.photoUrl ?? '').toString(),
-          onboardingToken: (profile['onboardingToken'] ?? '').toString(),
-        );
+      return await _handleGoogleResponse(
+        res.data ?? const <String, dynamic>{},
+        fallbackEmail: email,
+        fallbackName: creds.name.trim(),
+        fallbackGoogleId: creds.googleId.trim(),
+        fallbackPicture: creds.picture.trim(),
+        fallbackIdToken: idToken,
+        fallbackAccessToken: accessToken,
+      );
+    } on PlatformException catch (e) {
+      throw mapGooglePlatformException(e);
+    } catch (e) {
+      if (e is StaffRoleBlockedException ||
+          e is GoogleOnboardingRequiredException ||
+          e is ApiException) {
+        rethrow;
       }
+      throw ApiClient.mapDioError(e);
+    }
+  }
 
-      return await _handleAuthenticatedPayload(data);
+  /// Completes Google onboarding for a brand-new operator after TODA roster
+  /// verification by submitting `onboardingData` + `googleProfile`/`onboardingToken`
+  /// to `POST /api/v1/auth/google`.
+  Future<MobileUser> completeGoogleOnboarding({
+    required String email,
+    required String fullName,
+    required String address,
+    required String todaAssociation,
+    required String bodyNumber,
+    String googleId = '',
+    String picture = '',
+    String onboardingToken = '',
+    String idToken = '',
+    String accessToken = '',
+    String? emergencyContact,
+  }) async {
+    final cleanEmail = email.trim().toLowerCase();
+    final cleanName = fullName.trim();
+    final cleanAddress = address.trim();
+    final cleanToda = todaAssociation.trim();
+    final cleanBody = bodyNumber.trim().toUpperCase();
+    final cleanOnboardingToken = onboardingToken.trim();
+    final cleanIdToken = idToken.trim();
+    final cleanAccessToken = accessToken.trim();
+    final rawPhone = (emergencyContact ?? '').trim();
+    var cleanPhone =
+        rawPhone.isNotEmpty ? GasanConstants.canonicalizeContact(rawPhone) : '';
+    if (cleanPhone.startsWith('+639') && cleanPhone.length == 13) {
+      cleanPhone = '0${cleanPhone.substring(3)}';
+    } else if (cleanPhone.startsWith('639') && cleanPhone.length == 12) {
+      cleanPhone = '0${cleanPhone.substring(2)}';
+    }
+
+    try {
+      final res = await _api.dio.post<Map<String, dynamic>>(
+        '/auth/google',
+        data: {
+          'email': cleanEmail,
+          if (cleanOnboardingToken.isNotEmpty)
+            'onboardingToken': cleanOnboardingToken,
+          if (cleanIdToken.isNotEmpty) 'idToken': cleanIdToken,
+          if (cleanIdToken.isNotEmpty) 'credential': cleanIdToken,
+          if (cleanAccessToken.isNotEmpty) 'accessToken': cleanAccessToken,
+          'googleProfile': {
+            'email': cleanEmail,
+            if (cleanOnboardingToken.isNotEmpty)
+              'onboardingToken': cleanOnboardingToken,
+            'name': cleanName,
+            'picture': picture.trim(),
+            'googleId': googleId.trim(),
+          },
+          'onboardingData': {
+            'fullName': cleanName,
+            'name': cleanName,
+            'address': cleanAddress,
+            'todaAssociation': cleanToda,
+            'bodyNumber': cleanBody,
+            'email': cleanEmail,
+            if (cleanOnboardingToken.isNotEmpty)
+              'onboardingToken': cleanOnboardingToken,
+            'contact': cleanEmail,
+            if (cleanPhone.isNotEmpty) 'emergencyContact': cleanPhone,
+            if (cleanPhone.isNotEmpty) 'phone': cleanPhone,
+            'role': 'operator',
+          },
+        },
+      );
+
+      return await _handleGoogleResponse(
+        res.data ?? const <String, dynamic>{},
+        fallbackEmail: cleanEmail,
+        fallbackName: cleanName,
+        fallbackGoogleId: googleId.trim(),
+        fallbackPicture: picture.trim(),
+        fallbackIdToken: cleanIdToken,
+        fallbackAccessToken: cleanAccessToken,
+      );
     } catch (e) {
       if (e is StaffRoleBlockedException ||
           e is GoogleOnboardingRequiredException ||
@@ -287,15 +563,28 @@ class AuthRepository {
 
   Future<String> submitDeactivationAppeal({
     required String contact,
-    required String password,
+    String password = '',
     required String message,
+    String? googleIdToken,
+    String? googleAccessToken,
   }) async {
     try {
+      final cleanIdToken = (googleIdToken ?? '').trim();
+      final cleanAccessToken = (googleAccessToken ?? '').trim();
+      final hasGoogleReauth =
+          cleanIdToken.isNotEmpty || cleanAccessToken.isNotEmpty;
+
       final res = await _api.dio.post<Map<String, dynamic>>(
         '/auth/appeal',
         data: {
-          'contact': GasanConstants.canonicalizeContact(contact),
-          'password': password,
+          if (contact.trim().isNotEmpty)
+            'contact': GasanConstants.canonicalizeContact(contact),
+          if (!hasGoogleReauth && password.isNotEmpty) 'password': password,
+          if (cleanIdToken.isNotEmpty) 'googleCredential': cleanIdToken,
+          if (cleanIdToken.isNotEmpty) 'idToken': cleanIdToken,
+          if (cleanAccessToken.isNotEmpty)
+            'googleAccessToken': cleanAccessToken,
+          if (cleanAccessToken.isNotEmpty) 'accessToken': cleanAccessToken,
           'message': message.trim(),
         },
       );
@@ -510,13 +799,179 @@ class AuthRepository {
     }
   }
 
-  Future<MobileUser> _handleAuthenticatedPayload(
-    Map<String, dynamic> data,
-  ) async {
-    final token = (data['token'] ?? '').toString().trim();
+  Map<String, dynamic> _unwrapPayload(Map<String, dynamic> raw) {
+    final nested = raw['data'];
+    if (nested is Map) {
+      return <String, dynamic>{
+        ...raw,
+        ...Map<String, dynamic>.from(nested),
+      };
+    }
+    return raw;
+  }
+
+  String _extractSessionToken(Map<String, dynamic> payload) {
+    for (final key in const ['token', 'sessionToken', 'jwt']) {
+      final candidate = (payload[key] ?? '').toString().trim();
+      if (candidate.isNotEmpty) return candidate;
+    }
+    final nestedData = payload['data'];
+    if (nestedData is Map) {
+      for (final key in const ['token', 'sessionToken', 'jwt']) {
+        final candidate = (nestedData[key] ?? '').toString().trim();
+        if (candidate.isNotEmpty) return candidate;
+      }
+    }
+    final nestedUser = payload['user'];
+    if (nestedUser is Map) {
+      final candidate = (nestedUser['token'] ?? '').toString().trim();
+      if (candidate.isNotEmpty) return candidate;
+    }
+    return '';
+  }
+
+  Future<MobileUser> _handleGoogleResponse(
+    Map<String, dynamic> raw, {
+    String fallbackEmail = '',
+    String fallbackName = '',
+    String fallbackGoogleId = '',
+    String fallbackPicture = '',
+    String fallbackIdToken = '',
+    String fallbackAccessToken = '',
+  }) async {
+    final payload = _unwrapPayload(raw);
+    final serverMessage =
+        (payload['message'] ?? payload['error'] ?? '').toString().trim();
+
+    if (payload['accountDeactivated'] == true) {
+      throw ApiException(
+        message: serverMessage.isNotEmpty
+            ? serverMessage
+            : 'Your account has been deactivated.',
+        statusCode: 403,
+        accountDeactivated: true,
+        deactivationContact: (payload['contact'] ?? fallbackEmail).toString(),
+        deactivationReason: (payload['reason'] ?? '').toString(),
+        appealStatus: (payload['appealStatus'] ?? 'none').toString(),
+        hasLocalPassword: payload['hasLocalPassword'] is bool
+            ? payload['hasLocalPassword'] as bool
+            : false,
+        authProvider: (payload['authProvider'] ?? 'google').toString(),
+        rawData: raw,
+      );
+    }
+
+    if (payload['maintenanceMode'] == true) {
+      throw ApiException(
+        message: serverMessage.isNotEmpty
+            ? serverMessage
+            : 'Portal is currently undergoing system maintenance. Please try again later.',
+        statusCode: 503,
+        isMaintenance: true,
+        rawData: raw,
+      );
+    }
+
+    final rawProfile = payload['googleProfile'] ?? payload['profile'];
+    final profile = rawProfile is Map
+        ? Map<String, dynamic>.from(rawProfile)
+        : const <String, dynamic>{};
+
+    final onboardingToken =
+        (profile['onboardingToken'] ?? payload['onboardingToken'] ?? '')
+            .toString()
+            .trim();
+    final token = _extractSessionToken(payload);
+
+    final needsOnboarding = payload['isNewUser'] == true ||
+        payload['needsOnboarding'] == true ||
+        payload['requiresOnboarding'] == true ||
+        payload['onboardingRequired'] == true ||
+        (token.isEmpty && onboardingToken.isNotEmpty);
+
+    if (needsOnboarding) {
+      throw GoogleOnboardingRequiredException(
+        email: (profile['email'] ?? payload['email'] ?? fallbackEmail)
+            .toString()
+            .trim()
+            .toLowerCase(),
+        name: (profile['name'] ??
+                profile['fullName'] ??
+                payload['name'] ??
+                fallbackName)
+            .toString()
+            .trim(),
+        googleId:
+            (profile['googleId'] ?? profile['sub'] ?? fallbackGoogleId)
+                .toString()
+                .trim(),
+        picture: (profile['picture'] ?? fallbackPicture).toString().trim(),
+        onboardingToken: onboardingToken,
+        idToken: fallbackIdToken,
+        accessToken: fallbackAccessToken,
+        message: serverMessage,
+      );
+    }
+
+    final statusStr = (payload['status'] ?? '').toString().trim().toLowerCase();
+    final isPendingApproval = payload['pendingApproval'] == true ||
+        payload['requiresApproval'] == true ||
+        statusStr == 'pending_approval' ||
+        statusStr == 'pending';
+
+    if (isPendingApproval && token.isEmpty) {
+      throw ApiException(
+        message: serverMessage.isNotEmpty
+            ? serverMessage
+            : 'Your account is pending approval by the Office of the Municipal Vice Mayor (OVM) — LLSA I.',
+        rawData: raw,
+      );
+    }
+
     if (token.isEmpty) {
-      throw const ApiException(
-        message: 'Server did not return a valid session token.',
+      throw ApiException(
+        message: serverMessage.isNotEmpty
+            ? serverMessage
+            : 'Unable to complete Google sign-in right now. Please try again.',
+        rawData: raw,
+      );
+    }
+
+    return await _handleAuthenticatedPayload(payload);
+  }
+
+  Future<MobileUser> _handleAuthenticatedPayload(
+    Map<String, dynamic> rawData,
+  ) async {
+    final data = _unwrapPayload(rawData);
+    final serverMessage =
+        (data['message'] ?? data['error'] ?? '').toString().trim();
+
+    if (data['accountDeactivated'] == true) {
+      throw ApiException(
+        message: serverMessage.isNotEmpty
+            ? serverMessage
+            : 'Your account has been deactivated.',
+        statusCode: 403,
+        accountDeactivated: true,
+        deactivationContact: data['contact']?.toString(),
+        deactivationReason: data['reason']?.toString(),
+        appealStatus: data['appealStatus']?.toString(),
+        hasLocalPassword: data['hasLocalPassword'] is bool
+            ? data['hasLocalPassword'] as bool
+            : null,
+        authProvider: data['authProvider']?.toString(),
+        rawData: rawData,
+      );
+    }
+
+    final token = _extractSessionToken(data);
+    if (token.isEmpty) {
+      throw ApiException(
+        message: serverMessage.isNotEmpty
+            ? serverMessage
+            : 'Unable to establish your session. Please sign in again.',
+        rawData: rawData,
       );
     }
 
