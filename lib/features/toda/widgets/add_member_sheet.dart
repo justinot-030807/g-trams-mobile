@@ -229,7 +229,7 @@ class _AddTodaMemberSheetState extends State<AddTodaMemberSheet> {
                         height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.auto_awesome_outlined, size: 15),
+                    : const Icon(Icons.pin_outlined, size: 15),
                 label: Text(
                   strings.autoNextBodyNo,
                   style: const TextStyle(fontSize: 12),

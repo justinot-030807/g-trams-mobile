@@ -538,34 +538,43 @@ class _ValidityCountdownBox extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(Icons.calendar_today_outlined, size: 14, color: fg),
-              const SizedBox(width: 6),
-              Text(
-                strings.pick('Valid until', 'Balido hanggang'),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: fg,
+          SizedBox(
+            width: double.infinity,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.calendar_today_outlined, size: 14, color: fg),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        strings.pick('Valid until', 'Balido hanggang'),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: fg,
+                            ),
+                      ),
                     ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
+                  ],
+                ),
+                Text(
                   ManilaDateFormatter.formatLongDate(
                     expDate,
                     isFil: strings.isFil,
                   ),
-                  textAlign: TextAlign.end,
-                  overflow: TextOverflow.ellipsis,
                   style: CivicTheme.monoStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                     color: fg,
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 6),
           Text(
