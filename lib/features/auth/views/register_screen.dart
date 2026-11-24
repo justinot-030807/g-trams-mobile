@@ -723,21 +723,54 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             }
           },
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Text(
-              strings.registerTitle,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+            Container(
+              width: 32,
+              height: 32,
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: CivicColors.purePaper,
+                border: Border.all(
+                  color: CivicColors.gasanGold,
+                  width: 1.2,
+                ),
+              ),
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/images/gtrams-logo.png',
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
-            Text(
-              'STEP $_step OF 3 • ${stepTitle.toUpperCase()}',
-              style: CivicTheme.monoStyle(
-                fontSize: 10,
-                color: palette.muted,
-                letterSpacing: 0.6,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    strings.registerTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  Text(
+                    strings.pick(
+                      'Step $_step of 3 · $stepTitle',
+                      'Hakbang $_step ng 3 · $stepTitle',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: 11.5,
+                          color: palette.muted,
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -906,23 +939,41 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
         // Live TODA Roster Verification Status
         if (_isCheckingRoster)
-          const CivicBanner(
-            message: 'Checking official Gasan TODA masterlist...',
+          CivicBanner(
+            message: strings.pick(
+              'Checking official Gasan TODA masterlist...',
+              'Sinusuri sa opisyal na TODA masterlist...',
+            ),
             tone: CivicStatusTone.inProgress,
             icon: Icons.sync_rounded,
           )
         else if (_rosterResult != null) ...[
           CivicBanner(
             title: _rosterResult!.verified
-                ? 'TODA Masterlist Verified'
+                ? strings.pick(
+                    'TODA Masterlist Verified',
+                    'Beripikado sa TODA Masterlist',
+                  )
                 : (_rosterResult!.status == 'pending_input'
-                    ? 'Roster Verification Required'
-                    : 'Not Found in TODA Masterlist'),
+                    ? strings.pick(
+                        'Roster Check Pending',
+                        'Kailangan ng Beripikasyon',
+                      )
+                    : strings.pick(
+                        'Not Found in TODA Masterlist',
+                        'Hindi Nakita sa TODA Masterlist',
+                      )),
             message: _rosterResult!.message.isNotEmpty
                 ? _rosterResult!.message
                 : (_rosterResult!.verified
-                    ? 'Your record matches the accredited TODA roster.'
-                    : 'Please double-check your legal name and assigned body number.'),
+                    ? strings.pick(
+                        'Your record matches the accredited TODA roster.',
+                        'Tugma ang iyong rekord sa akreditadong TODA roster.',
+                      )
+                    : strings.pick(
+                        'Check your legal name and assigned body number.',
+                        'Suriin ang iyong pangalan at body number.',
+                      )),
             tone: _rosterResult!.verified
                 ? CivicStatusTone.active
                 : (_rosterResult!.status == 'pending_input'
@@ -935,7 +986,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       message: _rosterResult!.message,
                       advisory: _rosterResult!.advisory,
                     ),
-                    child: const Text('Read Official Advisory'),
+                    child: Text(
+                      strings.pick(
+                        'Read Official Advisory',
+                        'Basahin ang Opisyal na Abiso',
+                      ),
+                    ),
                   )
                 : null,
           ),
@@ -947,7 +1003,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           icon: Icons.arrow_forward_rounded,
           onPressed: _advanceFromStep1,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Center(
           child: Wrap(
             alignment: WrapAlignment.center,
@@ -959,8 +1015,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 strings.alreadyHaveAccount.trim(),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
-              GestureDetector(
-                onTap: () => context.pop(),
+              TextButton(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
+                  minimumSize: const Size(48, 40),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () => context.pop(),
                 child: Text(
                   strings.signIn,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
