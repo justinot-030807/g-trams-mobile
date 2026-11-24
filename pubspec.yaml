@@ -1,7 +1,7 @@
 name: gtrams_mobile
 description: "G-TRAMS Mobile — Dedicated Android companion app for Tricycle Operators & TODA Presidents of Gasan, Marinduque."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ^3.10.7

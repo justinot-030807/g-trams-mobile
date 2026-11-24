@@ -3,7 +3,7 @@
 - **Project:** G-TRAMS Mobile — Flutter Android APK exclusively for **Tricycle Operators** and **TODA Presidents** (Municipality of Gasan, Marinduque).
 - **Repo Isolation:** Standalone sibling repo (`C:\Users\Hp\g-trams-mobile`). Zero edits to `C:\Users\Hp\GTRAMS`.
 - **Shared Production Backend:** `https://g-trams-web2.onrender.com/api/v1` · Web Portal: `https://g-trams-official.vercel.app`.
-- **Current Stage:** ALL PHASES (1–6) COMPLETE — Release Ready (`v1.0.0`). Android Release Signing (`android/key.properties` + GitHub Actions keystore secrets), R8 shrinking & ProGuard keep rules, HTTPS-only release manifest, Universal + Split-per-ABI CI APK pipeline with `SHA256SUMS.txt`, Full E2E UAT QA Suite (`49/49` passing), and Release/UAT Guide (`docs/release-signing-and-uat.md`).
+- **Current Stage:** Release `v1.0.1` (`1.0.1+2`) — UI/Branding/Splash Coin-Flip, Android Google Sign-In + Onboarding, Strict AI OCR Validation, and Mobile Declutter Overhaul Complete. All 8 test suites (`65/65` passing), `flutter analyze` (`0` issues), `flutter build web` passed, and signed Android Release APK CI pipeline (`v1.0.1`) with `SHA256SUMS.txt`.
 
 ## Knowledge Map
 - [[architecture]] — Flutter layered architecture, packages, core modules, and feature layout.
