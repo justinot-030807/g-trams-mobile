@@ -2,6 +2,8 @@
 
 | Date | Agent / Model | Check | Result |
 |---|---|---|---|
+| 2026-11-24 | Codex (gpt-6.2-sol) | Verified the mobile audit fixes | `flutter analyze` clean, 75 tests passed, web build succeeded. Workflow shell checks covered missing secrets and matching, mismatching, and missing fingerprints. Signed APK verification remains for Android CI. |
+| 2026-11-24 | Codex (gpt-6.2-sol) | Source audit of mobile auth, storage, releases, and functional flows at `dfcaae1` | Six security findings recorded. Functional findings include stale uniqueness results, large-file reads before validation, and stale offline expiry countdowns. `flutter analyze` clean and 65 tests passed. Live backend and signed APK unverified. |
 | 2026-11-23 | Antigravity (model unspecified) | `flutter analyze` on `C:\Users\Hp\g-trams-mobile` | Passed — 0 issues found |
 | 2026-11-23 | Antigravity (model unspecified) | `flutter test` (`gasan_constants_test.dart` + `widget_test.dart`) | Passed — 12/12 tests passing (fixed responsive footer `Wrap` overflow caught during widget test) |
 | 2026-11-23 | Antigravity (model unspecified) | Native Android assets (`flutter_native_splash` + `flutter_launcher_icons`) | Passed — Light/Dark Android 12+ splash & adaptive Heritage Maroon launcher icons generated |

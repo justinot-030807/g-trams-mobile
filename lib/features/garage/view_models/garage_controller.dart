@@ -130,9 +130,15 @@ class GarageController extends StateNotifier<GarageState> {
     required OfflineWalletCache walletCache,
     required MobileUser? user,
     PortalSettings initialSettings = const PortalSettings(),
+    bool Function()? sessionIsCurrent,
+    int Function()? readSessionGeneration,
+    Future<void> Function()? revalidateSession,
   })  : _franchiseRepo = franchiseRepository,
         _settingsRepo = settingsRepository,
         _walletCache = walletCache,
+        _sessionIsCurrent = sessionIsCurrent,
+        _readSessionGeneration = readSessionGeneration,
+        _revalidateSession = revalidateSession,
         _user = user,
         super(
           GarageState(
@@ -152,6 +158,9 @@ class GarageController extends StateNotifier<GarageState> {
   final SettingsRepository _settingsRepo;
   final OfflineWalletCache _walletCache;
   final MobileUser? _user;
+  final bool Function()? _sessionIsCurrent;
+  final int Function()? _readSessionGeneration;
+  final Future<void> Function()? _revalidateSession;
 
   void _hydrateFromCache() {
     final uid = _user?.id ?? '';
@@ -182,6 +191,9 @@ class GarageController extends StateNotifier<GarageState> {
     }
 
     final hasCached = state.franchises.isNotEmpty || state.lastSyncedAt != null;
+    final generation = _readSessionGeneration?.call();
+    bool canUseResult() => mounted && _sessionIsCurrent?.call() != false &&
+        generation == _readSessionGeneration?.call();
     state = state.copyWith(
       isLoading: !isPullToRefresh && !hasCached,
       isRefreshing: isPullToRefresh || hasCached,
@@ -189,6 +201,8 @@ class GarageController extends StateNotifier<GarageState> {
     );
 
     try {
+      if (isPullToRefresh) await _revalidateSession?.call();
+      if (!canUseResult()) return;
       final franchisesFuture = _franchiseRepo.fetchMyFranchises();
       final settingsFuture = _settingsRepo.fetchSettingsOrThrow().then<PortalSettings?>(
             (value) => value,
@@ -197,6 +211,7 @@ class GarageController extends StateNotifier<GarageState> {
 
       final franchises = await franchisesFuture;
       final fetchedSettings = await settingsFuture;
+      if (!canUseResult()) return;
       final resolvedSettings = fetchedSettings ?? state.settings;
       final syncedAt = ServerTimeSync.nowUtc();
 
@@ -210,7 +225,7 @@ class GarageController extends StateNotifier<GarageState> {
         ),
       );
 
-      if (!mounted) return;
+      if (!canUseResult()) return;
       state = state.copyWith(
         franchises: franchises,
         settings: resolvedSettings,
@@ -222,7 +237,7 @@ class GarageController extends StateNotifier<GarageState> {
         clearError: true,
       );
     } catch (err) {
-      if (!mounted) return;
+      if (!canUseResult()) return;
       final apiErr = ApiClient.mapDioError(err);
       final cachedSnapshot = _walletCache.readSnapshot(user.id);
       if (cachedSnapshot != null && cachedSnapshot.hasData) {
@@ -292,12 +307,16 @@ class GarageController extends StateNotifier<GarageState> {
 final StateNotifierProvider<GarageController, GarageState>
     garageControllerProvider =
     StateNotifierProvider<GarageController, GarageState>((ref) {
-  final auth = ref.watch(authControllerProvider);
+  final (user, settings) = ref.watch(authControllerProvider.select((s) => (s.user, s.settings)));
+  final storage = ref.watch(secureSessionStorageProvider);
   return GarageController(
     franchiseRepository: ref.watch(franchiseRepositoryProvider),
     settingsRepository: ref.watch(settingsRepositoryProvider),
     walletCache: ref.watch(offlineWalletCacheProvider),
-    user: auth.user,
-    initialSettings: auth.settings,
+    user: user,
+    initialSettings: settings,
+    sessionIsCurrent: () => ref.read(authControllerProvider).user?.id == user?.id,
+    readSessionGeneration: () => storage.generation,
+    revalidateSession: () => ref.read(authControllerProvider.notifier).revalidateOfflineSession(),
   );
 });

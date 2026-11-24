@@ -63,6 +63,7 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          set -o pipefail
           if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
             printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '\r\n[:space:]' | base64 --decode > android/upload-keystore.jks
             printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=upload-keystore.jks\n' \
@@ -73,22 +74,55 @@ jobs:
             echo "signed=true" >> "$GITHUB_OUTPUT"
             echo "Production release keystore configured."
           else
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "::error::Production signing secrets are required for version tags."
+              exit 1
+            fi
             echo "signed=false" >> "$GITHUB_OUTPUT"
             echo "::warning::Release keystore secrets are not configured. Building with debug fallback signing for preview testing."
           fi
 
-      - name: Build Signed Android Release APK (arm64-v8a + armeabi-v7a)
+      - name: Build Android APK (arm64-v8a + armeabi-v7a)
         env:
           API_URL: ${{ github.event.inputs.api_base_url || 'https://g-trams-web2.onrender.com' }}
+          GTRAMS_ALLOW_DEBUG_SIGNING: ${{ steps.signing.outputs.signed == 'false' && !startsWith(github.ref, 'refs/tags/v') }}
         run: |
           flutter build apk --release \
             --target-platform android-arm,android-arm64 \
             --dart-define=API_BASE_URL="$API_URL"
 
-      - name: Stage Release APK & SHA-256 Checksum
+      - name: Verify version-tag APK signer
+        id: verify-signer
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          EXPECTED_FINGERPRINT: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
+        run: |
+          expected="$(printf '%s' "$EXPECTED_FINGERPRINT" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
+          if [[ ! "$expected" =~ ^[a-f0-9]{64}$ ]]; then
+            echo "::error::Set ANDROID_RELEASE_CERT_SHA256 to the official signing certificate's SHA-256 fingerprint."
+            exit 1
+          fi
+          apksigner="$(find "${ANDROID_HOME:?}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$apksigner"
+          signer_info="$("$apksigner" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk)"
+          actual="$(printf '%s\n' "$signer_info" | sed -nE 's/^Signer #[0-9]+ certificate SHA-256 digest: ([a-fA-F0-9]+)$/\1/p' | tr '[:upper:]' '[:lower:]')"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "::error::The APK signer does not match the official release certificate."
+            exit 1
+          fi
+          echo "verified=true" >> "$GITHUB_OUTPUT"
+
+      - name: Stage APK & SHA-256 Checksum
+        env:
+          SIGNED: ${{ steps.signing.outputs.signed }}
         run: |
           mkdir -p release-dist
-          cp build/app/outputs/flutter-apk/app-release.apk release-dist/gtrams-mobile-release.apk
+          if [[ "$SIGNED" == true ]]; then
+            apk_name=gtrams-mobile-release.apk
+          else
+            apk_name=gtrams-mobile-preview.apk
+          fi
+          cp build/app/outputs/flutter-apk/app-release.apk "release-dist/$apk_name"
           (cd release-dist && sha256sum *.apk > SHA256SUMS.txt)
           ls -lh release-dist/
           cat release-dist/SHA256SUMS.txt
@@ -100,12 +134,12 @@ jobs:
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gtrams-mobile-release-apk
+          name: ${{ steps.signing.outputs.signed == 'true' && 'gtrams-mobile-release-apk' || 'gtrams-mobile-preview-apk' }}
           path: release-dist/*
           retention-days: 30
 
       - name: Publish GitHub Release on version tag (v*)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && steps.verify-signer.outputs.verified == 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: |

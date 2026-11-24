@@ -336,7 +336,7 @@ class UpdatesController extends StateNotifier<UpdatesState> {
 
   Future<void> connectSocket({String? overrideToken}) async {
     final token = (overrideToken ?? await _readToken())?.trim() ?? '';
-    if (token.isNotEmpty) {
+    if (mounted && token.isNotEmpty) {
       _socket.connect(token);
     }
   }
@@ -602,12 +602,12 @@ class UpdatesController extends StateNotifier<UpdatesState> {
 final StateNotifierProvider<UpdatesController, UpdatesState>
     updatesControllerProvider =
     StateNotifierProvider<UpdatesController, UpdatesState>((ref) {
-  final userId = ref.watch(authControllerProvider.select((s) => s.user?.id ?? ''));
+  final auth = ref.watch(authControllerProvider.select((s) => (s.user?.id, s.offlineSession)));
   return UpdatesController(
     repository: ref.watch(communicationRepositoryProvider),
     settingsRepository: ref.watch(settingsRepositoryProvider),
     socketClient: ref.watch(realtimeSocketClientProvider),
-    currentUserId: userId,
+    currentUserId: auth.$1 ?? '',
     readToken: () => ref.read(authControllerProvider.notifier).readSessionToken(),
     onSessionRevoked: (reason) {
       ref.read(authControllerProvider.notifier).forceLogout(reason: reason);

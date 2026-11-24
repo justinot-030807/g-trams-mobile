@@ -443,9 +443,9 @@ class TodaGovernanceController extends StateNotifier<TodaGovernanceState> {
 final StateNotifierProvider<TodaGovernanceController, TodaGovernanceState>
     todaGovernanceControllerProvider =
     StateNotifierProvider<TodaGovernanceController, TodaGovernanceState>((ref) {
-  final auth = ref.watch(authControllerProvider);
+  final user = ref.watch(authControllerProvider.select((s) => s.user));
   return TodaGovernanceController(
     repository: ref.watch(todaRepositoryProvider),
-    user: auth.user,
+    user: user,
   );
 });

@@ -42,12 +42,9 @@ keytool -list -v -keystore android/upload-keystore.jks -alias gtrams-upload
    - `ANDROID_KEYSTORE_PASSWORD` — Keystore password
    - `ANDROID_KEY_ALIAS` — `gtrams-upload`
    - `ANDROID_KEY_PASSWORD` — Key password
-3. Push to `main` or tag a release (`git tag v1.0.0 && git push origin v1.0.0`):
-   - Workflow `.github/workflows/build-android-apk.yml` runs `flutter analyze`, `flutter test`, `flutter build web`, OVM naming check, signs the APK with R8 shrinking enabled, and publishes:
-     - `gtrams-mobile-universal-release.apk` (works on all Android 7.0+ / API 24+ devices)
-     - `gtrams-mobile-arm64-v8a-release.apk` (compact APK for modern 64-bit phones)
-     - `gtrams-mobile-armeabi-v7a-release.apk` (legacy 32-bit Android phones)
-     - `SHA256SUMS.txt` (cryptographic integrity manifest)
+3. In the **Variables** tab, add `ANDROID_RELEASE_CERT_SHA256`. Use the SHA-256 fingerprint of the official signing certificate from Step B. Colons and letter case are accepted.
+4. Push a version tag to publish `gtrams-mobile-release.apk` for both ARM architectures and `SHA256SUMS.txt`. The workflow checks that the APK signature is valid and matches the configured fingerprint before publishing.
+5. For branch builds that lack signing secrets, download `gtrams-mobile-preview.apk` from the workflow run. Use the preview APK for testing.
 
 #### Option 2 — Local Signed Build (Requires Android SDK + JDK 17)
 1. Copy `android/key.properties.example` to `android/key.properties` and fill in your passwords.

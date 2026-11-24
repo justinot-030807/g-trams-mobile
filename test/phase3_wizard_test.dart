@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,12 +28,14 @@ class _FakeWizardFranchiseRepo extends FranchiseRepository {
     this.ocrResponsesByDocType = const {},
     this.scanError,
     this.units = const [],
+    this.uniqueCheck,
   }) : super(apiClient: ApiClient(sessionStorage: SecureSessionStorage()));
 
   final bool duplicatePlate;
   final Map<String, Map<String, dynamic>> ocrResponsesByDocType;
   final Object? scanError;
   final List<FranchiseRecord> units;
+  final Future<UniqueFieldCheckResult> Function(String value)? uniqueCheck;
   final List<String> checkedUniqueFields = [];
   final List<String> scannedDocTypes = [];
   bool submittedNew = false;
@@ -48,6 +51,7 @@ class _FakeWizardFranchiseRepo extends FranchiseRepository {
     String? excludeId,
   }) async {
     checkedUniqueFields.add('$field:$value');
+    if (uniqueCheck case final check?) return check(value);
     final isDup = duplicatePlate && field == 'plateNo';
     return UniqueFieldCheckResult(
       field: field,
@@ -347,6 +351,34 @@ void main() {
   });
 
   group('FranchiseWizardController — AI OCR Auto-Fill, Unique Checks & Hive Drafts', () {
+    test('an outdated uniqueness response cannot replace the current result', () async {
+      final first = Completer<UniqueFieldCheckResult>();
+      final second = Completer<UniqueFieldCheckResult>();
+      final ctrl = FranchiseWizardController(
+        franchiseRepository: _FakeWizardFranchiseRepo(
+          uniqueCheck: (value) => value == 'OLD' ? first.future : second.future,
+        ),
+        draftCache: InMemoryWizardDraftCache(),
+        user: null,
+      );
+      addTearDown(ctrl.dispose);
+
+      ctrl.updateDraft((draft) => draft.copyWith(plateNo: 'OLD'));
+      final oldCheck = ctrl.checkUniqueField('plateNo', 'OLD');
+      ctrl.updateDraft((draft) => draft.copyWith(plateNo: 'NEW'));
+      expect(ctrl.state.checkingUniqueFields, isEmpty);
+      final newCheck = ctrl.checkUniqueField('plateNo', 'NEW');
+
+      second.complete(const UniqueFieldCheckResult(field: 'plateNo', value: 'NEW', isUnique: true));
+      await newCheck;
+      first.complete(const UniqueFieldCheckResult(field: 'plateNo', value: 'OLD', isUnique: false));
+      await oldCheck;
+
+      expect(ctrl.state.uniqueChecks['plateNo']?.value, 'NEW');
+      expect(ctrl.state.hasDuplicateConflict, isFalse);
+      ctrl.updateDraft((draft) => draft.copyWith(plateNo: 'OTHER'));
+      expect(ctrl.state.uniqueChecks, isEmpty);
+    });
     test('auto-fills vehicle specs from CR OCR, runs unique checks, saves & clears Hive draft', () async {
       final draftCache = InMemoryWizardDraftCache();
       final repo = _FakeWizardFranchiseRepo(

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gtrams_mobile/core/network/api_client.dart';
 import 'package:gtrams_mobile/core/storage/biometric_service.dart';
@@ -16,6 +19,7 @@ class AuthState {
     this.user,
     this.settings = const PortalSettings(),
     this.biometricSupported = false,
+    this.offlineSession = false,
     this.sessionRevokedReason,
   });
 
@@ -23,6 +27,7 @@ class AuthState {
   final MobileUser? user;
   final PortalSettings settings;
   final bool biometricSupported;
+  final bool offlineSession;
   final String? sessionRevokedReason;
 
   bool get isAuthenticated =>
@@ -34,6 +39,7 @@ class AuthState {
     bool clearUser = false,
     PortalSettings? settings,
     bool? biometricSupported,
+    bool? offlineSession,
     String? sessionRevokedReason,
     bool clearRevokedReason = false,
   }) {
@@ -42,6 +48,7 @@ class AuthState {
       user: clearUser ? null : (user ?? this.user),
       settings: settings ?? this.settings,
       biometricSupported: biometricSupported ?? this.biometricSupported,
+      offlineSession: offlineSession ?? this.offlineSession,
       sessionRevokedReason: clearRevokedReason
           ? null
           : (sessionRevokedReason ?? this.sessionRevokedReason),
@@ -97,6 +104,7 @@ class AuthController extends StateNotifier<AuthState> {
   final BiometricService _biometric;
   final OfflineWalletCache _walletCache;
   final WizardDraftCache _wizardDraftCache;
+  Timer? _offlineExpiry;
 
   /// Bootstraps server settings, biometric capability, and any existing session.
   Future<void> bootstrap({required bool requireBiometricLock}) async {
@@ -111,32 +119,78 @@ class AuthController extends StateNotifier<AuthState> {
     final bioAvailable = results[2] as bool;
 
     if (user != null) {
-      final shouldLock = requireBiometricLock && bioAvailable;
+      final deadline = _authRepo.offlineSessionExpiresAt;
       state = state.copyWith(
-        status: shouldLock
+        status: requireBiometricLock
             ? AuthStatus.biometricLocked
             : AuthStatus.authenticated,
         user: user,
         settings: settings,
         biometricSupported: bioAvailable,
+        offlineSession: deadline != null,
       );
+      if (deadline != null) {
+        _offlineExpiry?.cancel();
+        _offlineExpiry = Timer(deadline.difference(DateTime.now().toUtc()), () {
+          if (_authRepo.offlineSessionExpiresAt == deadline) forceLogout();
+        });
+      }
     } else {
       state = state.copyWith(
         status: AuthStatus.unauthenticated,
         clearUser: true,
         settings: settings,
         biometricSupported: bioAvailable,
+        offlineSession: false,
       );
     }
   }
 
   Future<bool> unlockWithBiometrics(String reason) async {
+    if (state.status != AuthStatus.biometricLocked) return false;
+    final lockedUser = state.user;
     final ok = await _biometric.authenticate(localizedReason: reason);
-    if (ok && state.user != null) {
+    if (!mounted) return false;
+    if (ok && lockedUser != null && identical(state.user, lockedUser) &&
+        state.status == AuthStatus.biometricLocked) {
+      final deadline = _authRepo.offlineSessionExpiresAt;
+      if (deadline != null && !DateTime.now().toUtc().isBefore(deadline)) {
+        forceLogout();
+        return false;
+      }
       state = state.copyWith(status: AuthStatus.authenticated);
       return true;
     }
     return false;
+  }
+
+  bool lockOnResume() {
+    if (!state.isAuthenticated) return false;
+    state = state.copyWith(status: AuthStatus.biometricLocked);
+    return true;
+  }
+
+  Future<void> revalidateOfflineSession() async {
+    final user = state.user;
+    final deadline = _authRepo.offlineSessionExpiresAt;
+    if (user == null || !state.isAuthenticated || deadline == null) return;
+    if (!DateTime.now().toUtc().isBefore(deadline)) {
+      forceLogout();
+      return;
+    }
+    try {
+      final fresh = await _authRepo.fetchProfile();
+      if (!mounted || state.user?.id != user.id) return;
+      _offlineExpiry?.cancel();
+      state = state.copyWith(
+        offlineSession: false,
+        user: mapEquals(user.toJson(), fresh.toJson()) ? user : fresh,
+      );
+    } catch (error) {
+      if (!mounted || state.user?.id != user.id) return;
+      final status = ApiClient.mapDioError(error).statusCode;
+      if (status == 401 || status == 403) forceLogout();
+    }
   }
 
   Future<MobileUser> login({
@@ -144,21 +198,13 @@ class AuthController extends StateNotifier<AuthState> {
     required String password,
   }) async {
     final user = await _authRepo.login(contact: contact, password: password);
-    state = state.copyWith(
-      status: AuthStatus.authenticated,
-      user: user,
-      clearRevokedReason: true,
-    );
+    setAuthenticatedUser(user);
     return user;
   }
 
   Future<MobileUser> signInWithGoogle() async {
     final user = await _authRepo.signInWithGoogle();
-    state = state.copyWith(
-      status: AuthStatus.authenticated,
-      user: user,
-      clearRevokedReason: true,
-    );
+    setAuthenticatedUser(user);
     return user;
   }
 
@@ -188,19 +234,17 @@ class AuthController extends StateNotifier<AuthState> {
       accessToken: accessToken,
       emergencyContact: emergencyContact,
     );
-    state = state.copyWith(
-      status: AuthStatus.authenticated,
-      user: user,
-      clearRevokedReason: true,
-    );
+    setAuthenticatedUser(user);
     return user;
   }
 
   void setAuthenticatedUser(MobileUser user) {
+    _offlineExpiry?.cancel();
     state = state.copyWith(
       status: AuthStatus.authenticated,
       user: user,
       clearRevokedReason: true,
+      offlineSession: false,
     );
   }
 
@@ -227,32 +271,40 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
-    final uid = state.user?.id ?? '';
-    await _authRepo.logout();
-    if (uid.isNotEmpty) {
-      await _walletCache.clearUser(uid);
-      await _wizardDraftCache.clearAllForUser(uid);
-    }
-    state = state.copyWith(
-      status: AuthStatus.unauthenticated,
-      clearUser: true,
-      clearRevokedReason: true,
-    );
+    await _endSession();
   }
 
   void forceLogout({String? reason}) {
     if (state.status == AuthStatus.unauthenticated && reason == null) return;
+    unawaited(_endSession(reason: reason));
+  }
+
+  Future<void> _endSession({String? reason}) async {
+    _offlineExpiry?.cancel();
     final uid = state.user?.id ?? '';
-    _authRepo.logout();
-    if (uid.isNotEmpty) {
-      _walletCache.clearUser(uid);
-      _wizardDraftCache.clearAllForUser(uid);
-    }
+    final cleanup = Future.wait([
+      _authRepo.logout(),
+      if (uid.isNotEmpty) _walletCache.clearUser(uid),
+      if (uid.isNotEmpty) _wizardDraftCache.clearAllForUser(uid),
+    ]);
     state = state.copyWith(
       status: AuthStatus.unauthenticated,
       clearUser: true,
+      offlineSession: false,
       sessionRevokedReason: reason,
+      clearRevokedReason: reason == null,
     );
+    try {
+      await cleanup;
+    } catch (_) {
+      debugPrint('One or more G-TRAMS session records could not be cleared.');
+    }
+  }
+
+  @override
+  void dispose() {
+    _offlineExpiry?.cancel();
+    super.dispose();
   }
 }
 

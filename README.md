@@ -38,7 +38,7 @@ flutter build web --no-pub --no-wasm-dry-run
 ```
 
 ### 4. Build Signed Release APK
-- **Cloud Build (Zero local Android SDK needed):** Configure the 4 keystore secrets documented in `docs/release-signing-and-uat.md` and push to `main` or tag `v1.0.0` to trigger `.github/workflows/build-android-apk.yml` — produces Universal + Split-per-ABI `.apk` builds and `SHA256SUMS.txt`.
+- **Cloud Build (Zero local Android SDK needed):** Configure the keystore secrets and `ANDROID_RELEASE_CERT_SHA256` variable in [the signing guide](docs/release-signing-and-uat.md). A version tag publishes the verified ARM APK and `SHA256SUMS.txt`. Branch builds without release signing produce a preview APK.
 - **Local Build (with Android SDK & JDK 17):**
   ```powershell
   flutter build apk --release --dart-define=API_BASE_URL=https://g-trams-web2.onrender.com

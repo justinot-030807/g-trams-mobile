@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gtrams_mobile/core/services/bounded_file_read.dart';
 import 'package:gtrams_mobile/core/services/mlkit_scanner_stub.dart'
     if (dart.library.io) 'package:gtrams_mobile/core/services/mlkit_scanner_io.dart'
     as mlkit_impl;
@@ -12,9 +13,10 @@ import 'package:image_picker/image_picker.dart';
 /// - Chrome Web / Other: Photo Gallery + JPG/PNG/WEBP/PDF File Picker
 class DocumentCaptureService {
   DocumentCaptureService({ImagePicker? imagePicker})
-      : _imagePicker = imagePicker ?? ImagePicker();
+    : _imagePicker = imagePicker ?? ImagePicker();
 
   static const int maxFileSizeBytes = 15 * 1024 * 1024; // 15MB backend limit
+  static const _images = ['jpg', 'jpeg', 'png', 'webp'];
 
   final ImagePicker _imagePicker;
 
@@ -29,13 +31,7 @@ class DocumentCaptureService {
   /// Launches Google ML Kit Smart Document Scanner on Android (`null` if cancelled/unsupported).
   Future<ScannedDocumentAttachment?> scanWithSmartCamera() async {
     if (!supportsSmartCameraScanner) return null;
-    final scanned = await mlkit_impl.scanWithPlatformMlKit();
-    if (scanned != null && scanned.sizeBytes > maxFileSizeBytes) {
-      throw const FormatException(
-        'Scanned image exceeds the 15 MB limit. Please retry with lower resolution.',
-      );
-    }
-    return scanned;
+    return mlkit_impl.scanWithPlatformMlKit(maxBytes: maxFileSizeBytes);
   }
 
   /// Captures a photo directly from the device camera (`ImagePicker`).
@@ -47,12 +43,11 @@ class DocumentCaptureService {
       maxWidth: 1920,
     );
     if (xfile == null) return null;
-    final bytes = await xfile.readAsBytes();
-    if (bytes.length > maxFileSizeBytes) {
-      throw const FormatException(
-        'Captured photo exceeds the 15 MB limit. Please choose a smaller photo.',
-      );
-    }
+    final bytes = await readBoundedFile(
+      size: await xfile.length(),
+      stream: xfile.openRead(),
+      maxBytes: maxFileSizeBytes,
+    );
     return ScannedDocumentAttachment(
       bytes: bytes,
       fileName: xfile.name.isNotEmpty ? xfile.name : 'camera_capture.jpg',
@@ -63,18 +58,24 @@ class DocumentCaptureService {
 
   /// Picks a photo from the device gallery (`ImagePicker`).
   Future<ScannedDocumentAttachment?> pickFromGallery() async {
+    if (kIsWeb) {
+      return _pickFile(
+        extensions: _images,
+        fallbackName: 'gallery_photo.jpg',
+        source: 'Gallery',
+      );
+    }
     final xfile = await _imagePicker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 85,
       maxWidth: 1920,
     );
     if (xfile == null) return null;
-    final bytes = await xfile.readAsBytes();
-    if (bytes.length > maxFileSizeBytes) {
-      throw const FormatException(
-        'Selected image exceeds the 15 MB limit. Please choose a smaller image.',
-      );
-    }
+    final bytes = await readBoundedFile(
+      size: await xfile.length(),
+      stream: xfile.openRead(),
+      maxBytes: maxFileSizeBytes,
+    );
     return ScannedDocumentAttachment(
       bytes: bytes,
       fileName: xfile.name.isNotEmpty ? xfile.name : 'gallery_photo.jpg',
@@ -84,62 +85,53 @@ class DocumentCaptureService {
   }
 
   /// Picks a JPG, PNG, WEBP, or PDF file via `file_picker` (works on Android & Chrome Web).
-  Future<ScannedDocumentAttachment?> pickDocumentFile() async {
-    final result = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return null;
-    final file = result.files.first;
-    final bytes = file.bytes;
-    if (bytes == null || bytes.isEmpty) {
-      throw const FormatException(
-        'Could not read the selected file. Please pick another image or PDF.',
-      );
-    }
-    if (bytes.length > maxFileSizeBytes) {
-      throw const FormatException(
-        'File exceeds the 15 MB limit. Please select a smaller document.',
-      );
-    }
-    return ScannedDocumentAttachment(
-      bytes: bytes,
-      fileName: file.name.isNotEmpty ? file.name : 'document.jpg',
-      mimeType: _inferMime(file.name, ext: file.extension),
-      sourceLabel: 'File',
-    );
-  }
+  Future<ScannedDocumentAttachment?> pickDocumentFile({
+    int maxBytes = maxFileSizeBytes,
+  }) => _pickFile(
+    extensions: const [..._images, 'pdf'],
+    fallbackName: 'document.jpg',
+    source: 'File',
+    maxBytes: maxBytes,
+  );
 
   /// Picks a TODA roster file (`JPG`, `PNG`, `WEBP`, `PDF`, `XLSX`, or `CSV`, `<=15MB`).
-  Future<ScannedDocumentAttachment?> pickRosterFile() async {
+  Future<ScannedDocumentAttachment?> pickRosterFile() => _pickFile(
+    extensions: const [..._images, 'pdf', 'xlsx', 'csv'],
+    fallbackName: 'toda_roster.jpg',
+    source: 'Roster File',
+  );
+
+  Future<ScannedDocumentAttachment?> _pickFile({
+    required List<String> extensions,
+    required String fallbackName,
+    required String source,
+    int maxBytes = maxFileSizeBytes,
+  }) async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'xlsx', 'csv'],
-      withData: true,
+      allowedExtensions: extensions,
+      withReadStream: true,
     );
     if (result == null || result.files.isEmpty) return null;
     final file = result.files.first;
-    final bytes = file.bytes;
-    if (bytes == null || bytes.isEmpty) {
-      throw const FormatException(
-        'Could not read the selected roster file. Please choose another file.',
-      );
-    }
-    if (bytes.length > maxFileSizeBytes) {
-      throw const FormatException(
-        'Roster file exceeds the 15 MB limit. Please select a smaller file.',
-      );
-    }
+    final bytes = await readBoundedFile(
+      size: file.size,
+      stream: file.readStream,
+      maxBytes: maxBytes,
+    );
     return ScannedDocumentAttachment(
       bytes: bytes,
-      fileName: file.name.isNotEmpty ? file.name : 'toda_roster.jpg',
+      fileName: file.name.isNotEmpty ? file.name : fallbackName,
       mimeType: _inferMime(file.name, ext: file.extension),
-      sourceLabel: 'Roster File',
+      sourceLabel: source,
     );
   }
 
-  static String _inferMime(String name, {String? ext, String fallback = 'image/jpeg'}) {
+  static String _inferMime(
+    String name, {
+    String? ext,
+    String fallback = 'image/jpeg',
+  }) {
     final e = (ext ?? '').toLowerCase();
     final lower = name.toLowerCase();
     if (e == 'pdf' || lower.endsWith('.pdf')) return 'application/pdf';
@@ -149,7 +141,10 @@ class DocumentCaptureService {
     if (e == 'csv' || lower.endsWith('.csv')) return 'text/csv';
     if (e == 'png' || lower.endsWith('.png')) return 'image/png';
     if (e == 'webp' || lower.endsWith('.webp')) return 'image/webp';
-    if (e == 'jpg' || e == 'jpeg' || lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+    if (e == 'jpg' ||
+        e == 'jpeg' ||
+        lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg')) {
       return 'image/jpeg';
     }
     return fallback;

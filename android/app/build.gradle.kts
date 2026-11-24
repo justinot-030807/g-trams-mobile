@@ -34,6 +34,7 @@ val hasReleaseSigning =
         !resolvedKeyAlias.isNullOrBlank() &&
         !resolvedKeyPassword.isNullOrBlank() &&
         rootProject.file(resolvedStoreFilePath).exists()
+val allowDebugSigning = System.getenv("GTRAMS_ALLOW_DEBUG_SIGNING") == "true"
 
 android {
     namespace = "ph.gov.gasan.gtrams.gtrams_mobile"
@@ -72,12 +73,12 @@ android {
 
     buildTypes {
         release {
-            // Uses production upload keystore when android/key.properties or CI secrets are configured;
-            // falls back to debug keystore for unsigned PR verification builds.
             signingConfig = if (hasReleaseSigning) {
                 signingConfigs.getByName("release")
-            } else {
+            } else if (allowDebugSigning) {
                 signingConfigs.getByName("debug")
+            } else {
+                null
             }
             isMinifyEnabled = true
             isShrinkResources = true

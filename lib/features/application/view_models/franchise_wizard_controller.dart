@@ -182,6 +182,12 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
   final WizardDraftCache _draftCache;
   final MobileUser? _user;
   final Future<void> Function()? onSubmittedRefreshGarage;
+  final _uniqueRequests = <String, Object>{};
+
+  void _resetDraftState(FranchiseWizardState next) {
+    _uniqueRequests.clear();
+    state = next;
+  }
 
   void _hydrateApplyDraftIfPresent() {
     final user = _user;
@@ -204,7 +210,7 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
     final fresh = user != null
         ? FranchiseWizardDraft.fromUser(user)
         : const FranchiseWizardDraft();
-    state = FranchiseWizardState(draft: fresh);
+    _resetDraftState(FranchiseWizardState(draft: fresh));
   }
 
   /// Opens Fix & Reapply mode pre-filled from a rejected franchise record.
@@ -215,7 +221,7 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
       user: user,
       mode: WizardFlowMode.fixReapply,
     );
-    state = FranchiseWizardState(draft: prefilled);
+    _resetDraftState(FranchiseWizardState(draft: prefilled));
   }
 
   /// Opens Renewal mode pre-filled from an eligible franchise record (resuming Hive draft if saved).
@@ -230,11 +236,11 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
           user: user,
           mode: WizardFlowMode.renewal,
         );
-    state = FranchiseWizardState(
+    _resetDraftState(FranchiseWizardState(
       draft: draft,
       hasResumedDraft: saved != null,
       targetUnitForRenewal: unit,
-    );
+    ));
   }
 
   /// Discards the currently saved Hive draft and resets the active flow cleanly.
@@ -256,10 +262,10 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
         user: user ?? const MobileUser(id: '', name: '', role: 'operator'),
         mode: WizardFlowMode.renewal,
       );
-      state = FranchiseWizardState(
+      _resetDraftState(FranchiseWizardState(
         draft: fresh,
         targetUnitForRenewal: renewUnit,
-      );
+      ));
     } else {
       await startNewApplication(clearSavedDraft: false);
     }
@@ -272,8 +278,25 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
     final nextDraft = updater(state.draft).copyWith(
       savedAt: DateTime.now().toUtc(),
     );
-    state = state.copyWith(draft: nextDraft, clearError: true);
+    state = _withUpdatedDraft(nextDraft).copyWith(clearError: true);
     _persistDraft(nextDraft);
+  }
+
+  FranchiseWizardState _withUpdatedDraft(FranchiseWizardDraft next) {
+    final previous = state.draft;
+    final checks = Map<String, UniqueFieldCheckResult>.of(state.uniqueChecks);
+    final checking = Set<String>.of(state.checkingUniqueFields);
+    for (final (field, before, after) in [
+      ('plateNo', previous.plateNo, next.plateNo),
+      ('motorNo', previous.motorNo, next.motorNo),
+      ('chassisNo', previous.chassisNo, next.chassisNo),
+    ]) {
+      if (before.trim().toUpperCase() == after.trim().toUpperCase()) continue;
+      _uniqueRequests.remove(field);
+      checks.remove(field);
+      checking.remove(field);
+    }
+    return state.copyWith(draft: next, uniqueChecks: checks, checkingUniqueFields: checking);
   }
 
   void setStep(int step) {
@@ -341,15 +364,17 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
   /// Runs real-time uniqueness validation (`plateNo`, `motorNo`, or `chassisNo`).
   Future<void> checkUniqueField(String field, String value) async {
     final trimmed = value.trim().toUpperCase();
+    final nextChecks = Map<String, UniqueFieldCheckResult>.of(state.uniqueChecks)..remove(field);
+    final checking = Set<String>.of(state.checkingUniqueFields)..remove(field);
     if (trimmed.length < 3) {
-      final nextChecks = Map<String, UniqueFieldCheckResult>.from(state.uniqueChecks)
-        ..remove(field);
-      state = state.copyWith(uniqueChecks: nextChecks);
+      _uniqueRequests.remove(field);
+      state = state.copyWith(uniqueChecks: nextChecks, checkingUniqueFields: checking);
       return;
     }
 
-    final checking = Set<String>.from(state.checkingUniqueFields)..add(field);
-    state = state.copyWith(checkingUniqueFields: checking);
+    final request = Object();
+    _uniqueRequests[field] = request;
+    state = state.copyWith(uniqueChecks: nextChecks, checkingUniqueFields: checking..add(field));
 
     try {
       final excludeId = state.draft.mode == WizardFlowMode.fixReapply
@@ -360,20 +385,19 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
         value: trimmed,
         excludeId: excludeId,
       );
-      if (!mounted) return;
+      if (!mounted || !identical(_uniqueRequests[field], request)) return;
       final nextChecks = Map<String, UniqueFieldCheckResult>.from(state.uniqueChecks)
         ..[field] = result;
-      final nextChecking = Set<String>.from(state.checkingUniqueFields)
-        ..remove(field);
-      state = state.copyWith(
-        uniqueChecks: nextChecks,
-        checkingUniqueFields: nextChecking,
-      );
+      state = state.copyWith(uniqueChecks: nextChecks);
     } catch (_) {
-      if (!mounted) return;
-      final nextChecking = Set<String>.from(state.checkingUniqueFields)
-        ..remove(field);
-      state = state.copyWith(checkingUniqueFields: nextChecking);
+      // The server still validates identifiers on submission.
+    } finally {
+      if (mounted && identical(_uniqueRequests[field], request)) {
+        _uniqueRequests.remove(field);
+        state = state.copyWith(
+          checkingUniqueFields: Set<String>.of(state.checkingUniqueFields)..remove(field),
+        );
+      }
     }
   }
 
@@ -443,8 +467,7 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
                 appliedFields: outcome.appliedFields,
               );
 
-        state = state.copyWith(
-          draft: updatedDraft,
+        state = _withUpdatedDraft(updatedDraft).copyWith(
           clearScanning: true,
           ocrFeedback: updatedFeedback,
         );
@@ -911,11 +934,11 @@ final StateNotifierProvider<FranchiseWizardController, FranchiseWizardState>
     franchiseWizardControllerProvider =
     StateNotifierProvider<FranchiseWizardController, FranchiseWizardState>(
         (ref) {
-  final auth = ref.watch(authControllerProvider);
+  final user = ref.watch(authControllerProvider.select((s) => s.user));
   return FranchiseWizardController(
     franchiseRepository: ref.watch(franchiseRepositoryProvider),
     draftCache: ref.watch(wizardDraftCacheProvider),
-    user: auth.user,
+    user: user,
     onSubmittedRefreshGarage: () => ref
         .read(garageControllerProvider.notifier)
         .loadGarage(isPullToRefresh: true),

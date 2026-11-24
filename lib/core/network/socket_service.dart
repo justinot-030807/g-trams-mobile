@@ -226,6 +226,7 @@ class SocketIoRealtimeClient implements RealtimeSocketClient {
     });
 
     socket.on('session_revoked', (data) {
+      if (!identical(socket, _socket)) return;
       final reason = data is Map
           ? (data['reason'] ??
                   'Your session expired due to a security update. Please sign in again.')

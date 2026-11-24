@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gtrams_mobile/core/storage/private_cache_box.dart';
 import 'package:gtrams_mobile/data/models/application_wizard_models.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -21,7 +22,7 @@ abstract class WizardDraftCache {
   Future<void> clearAllForUser(String userId);
 }
 
-/// Hive-backed wizard draft store (`gtrams_wizard_drafts_v1`).
+/// Encrypted wizard draft storage on native platforms.
 class HiveWizardDraftCache implements WizardDraftCache {
   HiveWizardDraftCache(this._box);
 
@@ -31,8 +32,9 @@ class HiveWizardDraftCache implements WizardDraftCache {
 
   static Future<WizardDraftCache> init() async {
     try {
-      final box = await Hive.openBox<String>(boxName);
-      return HiveWizardDraftCache(box);
+      await Hive.initFlutter();
+      final box = await PrivateCacheBox.open(boxName);
+      return box == null ? InMemoryWizardDraftCache() : HiveWizardDraftCache(box);
     } catch (err) {
       debugPrint('HiveWizardDraftCache fallback to memory: $err');
       return InMemoryWizardDraftCache();

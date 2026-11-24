@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gtrams_mobile/core/storage/private_cache_box.dart';
 import 'package:gtrams_mobile/data/models/auth_models.dart';
 import 'package:gtrams_mobile/data/models/franchise_models.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -35,10 +36,14 @@ class OfflineWalletSnapshot {
         : null;
 
     final rawFranchises = json['franchises'];
+    final lastSyncedAt = DateTime.tryParse(json['lastSyncedAt']?.toString() ?? '')?.toUtc();
     final franchises = rawFranchises is List
         ? rawFranchises
             .whereType<Map>()
-            .map((e) => FranchiseRecord.fromJson(Map<String, dynamic>.from(e)))
+            .map((e) => FranchiseRecord.fromJson(
+                  Map<String, dynamic>.from(e),
+                  daysRemainingSyncedAt: lastSyncedAt,
+                ))
             .toList()
         : <FranchiseRecord>[];
 
@@ -46,11 +51,6 @@ class OfflineWalletSnapshot {
     final settings = rawSettings is Map
         ? PortalSettings.fromJson(Map<String, dynamic>.from(rawSettings))
         : const PortalSettings();
-
-    final rawSynced = json['lastSyncedAt']?.toString();
-    final lastSyncedAt = rawSynced != null && rawSynced.isNotEmpty
-        ? DateTime.tryParse(rawSynced)?.toUtc()
-        : null;
 
     return OfflineWalletSnapshot(
       user: user,
@@ -70,7 +70,7 @@ abstract class OfflineWalletCache {
   Future<void> clearAll();
 }
 
-/// Hive-backed offline wallet storage (IndexedDB on Chrome Web, app storage on Android).
+/// Encrypted offline wallet storage on native platforms.
 class HiveOfflineWalletCache implements OfflineWalletCache {
   HiveOfflineWalletCache(this._box);
 
@@ -81,8 +81,8 @@ class HiveOfflineWalletCache implements OfflineWalletCache {
   static Future<OfflineWalletCache> init() async {
     try {
       await Hive.initFlutter();
-      final box = await Hive.openBox<String>(boxName);
-      return HiveOfflineWalletCache(box);
+      final box = await PrivateCacheBox.open(boxName);
+      return box == null ? InMemoryOfflineWalletCache() : HiveOfflineWalletCache(box);
     } catch (err) {
       debugPrint('HiveOfflineWalletCache fallback to memory: $err');
       return InMemoryOfflineWalletCache();

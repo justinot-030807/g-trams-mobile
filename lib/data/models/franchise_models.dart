@@ -285,6 +285,7 @@ class FranchiseRecord {
     this.approvalDate,
     this.expiryDate,
     this.daysRemaining,
+    this.daysRemainingSyncedAt,
     this.isExpiredVirtual = false,
     this.isExpiringSoonVirtual = false,
     this.occupiesFleetSlot,
@@ -352,6 +353,7 @@ class FranchiseRecord {
   final DateTime? approvalDate;
   final DateTime? expiryDate;
   final int? daysRemaining;
+  final DateTime? daysRemainingSyncedAt;
   final bool isExpiredVirtual;
   final bool isExpiringSoonVirtual;
   final bool? occupiesFleetSlot;
@@ -495,7 +497,16 @@ class FranchiseRecord {
 
   /// Server-authoritative `daysRemaining` in `Asia/Manila` (falls back to Manila calendar delta).
   int? effectiveDaysRemaining({DateTime? nowManilaOverride}) {
-    if (daysRemaining != null) return daysRemaining;
+    final serverDays = daysRemaining;
+    if (serverDays != null) {
+      final syncedAt = daysRemainingSyncedAt;
+      if (syncedAt == null) return serverDays;
+      final elapsedDays = -ManilaDateFormatter.calculateManilaDaysRemaining(
+        syncedAt,
+        nowManilaOverride: nowManilaOverride,
+      );
+      return elapsedDays > 0 ? serverDays - elapsedDays : serverDays;
+    }
     final exp = expiryDate ?? issuedPermit?.expiryDate;
     if (exp == null) return null;
     return ManilaDateFormatter.calculateManilaDaysRemaining(
@@ -648,7 +659,7 @@ class FranchiseRecord {
     ].join('\n');
   }
 
-  factory FranchiseRecord.fromJson(Map<String, dynamic> json) {
+  factory FranchiseRecord.fromJson(Map<String, dynamic> json, {DateTime? daysRemainingSyncedAt}) {
     final rawOperator = json['operator'];
     final operatorId = rawOperator is Map
         ? (rawOperator['_id'] ?? rawOperator['id'] ?? '').toString()
@@ -695,6 +706,7 @@ class FranchiseRecord {
       approvalDate: ManilaDateFormatter.tryParseIso(json['approvalDate']),
       expiryDate: ManilaDateFormatter.tryParseIso(json['expiryDate']),
       daysRemaining: _parseNullableInt(json['daysRemaining']),
+      daysRemainingSyncedAt: daysRemainingSyncedAt,
       isExpiredVirtual: json['isExpired'] == true,
       isExpiringSoonVirtual: json['isExpiringSoon'] == true,
       occupiesFleetSlot: json['occupiesFleetSlot'] is bool

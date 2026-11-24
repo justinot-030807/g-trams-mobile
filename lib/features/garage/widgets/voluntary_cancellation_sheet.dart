@@ -1,8 +1,9 @@
 import 'dart:typed_data';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:gtrams_mobile/core/l10n/app_strings.dart';
 import 'package:gtrams_mobile/core/network/api_client.dart';
+import 'package:gtrams_mobile/core/services/bounded_file_read.dart';
+import 'package:gtrams_mobile/core/services/document_capture_service.dart';
 import 'package:gtrams_mobile/core/theme/civic_colors.dart';
 import 'package:gtrams_mobile/core/theme/civic_theme.dart';
 import 'package:gtrams_mobile/data/models/franchise_models.dart';
@@ -133,53 +134,25 @@ class _VoluntaryCancellationSheetState
   Future<void> _pickFile() async {
     setState(() => _error = null);
     try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-        withData: true,
-      );
-      if (result == null || result.files.isEmpty) return;
-      final file = result.files.first;
-      final bytes = file.bytes;
-      if (bytes == null || bytes.isEmpty) {
-        setState(() {
-          _error = widget.strings.pick(
-            'Could not read the selected file. Please choose another image or PDF.',
-            'Hindi mabasa ang napiling file. Pumili ng ibang larawan o PDF.',
-          );
-        });
-        return;
-      }
-      if (bytes.length > _maxFileBytes) {
-        setState(() {
-          _error = widget.strings.pick(
-            'File exceeds the 10 MB limit. Please upload a smaller photo or PDF.',
-            'Lampas sa 10 MB ang file. Mag-upload ng mas maliit na larawan o PDF.',
-          );
-        });
-        return;
-      }
-
-      final ext = (file.extension ?? '').toLowerCase();
-      final mime = switch (ext) {
-        'pdf' => 'application/pdf',
-        'png' => 'image/png',
-        'webp' => 'image/webp',
-        _ => 'image/jpeg',
-      };
-
+      final file = await DocumentCaptureService().pickDocumentFile(maxBytes: _maxFileBytes);
+      if (!mounted || file == null) return;
       setState(() {
-        _pickedBytes = bytes;
-        _pickedFileName = file.name;
-        _pickedMimeType = mime;
+        _pickedBytes = file.bytes;
+        _pickedFileName = file.fileName;
+        _pickedMimeType = file.mimeType;
       });
     } catch (err) {
       if (!mounted) return;
       setState(() {
-        _error = widget.strings.pick(
-          'Unable to open file picker. You can still type your formal letter directly.',
-          'Hindi mabuksan ang file picker. Maaari mong i-type nang direkta ang pormal na liham.',
-        );
+        _error = err is FileTooLargeException
+            ? widget.strings.pick(
+                'File exceeds the 10 MB limit. Please upload a smaller photo or PDF.',
+                'Lampas sa 10 MB ang file. Mag-upload ng mas maliit na larawan o PDF.',
+              )
+            : widget.strings.pick(
+                'Could not read the file. Choose another file or type your letter.',
+                'Hindi mabasa ang file. Pumili ng ibang file o i-type ang iyong liham.',
+              );
       });
     }
   }

@@ -69,23 +69,57 @@ class ApiClient {
   final Dio dio;
 
   static const Set<String> _safeRetryMethods = {'GET', 'HEAD', 'OPTIONS'};
+  static const _requestGeneration = 'sessionGeneration';
+
+  bool _isCurrent(RequestOptions options) =>
+      options.extra[_requestGeneration] == _sessionStorage.generation;
+
+  static DioException _sessionChanged(RequestOptions options) => DioException(
+        requestOptions: options,
+        type: DioExceptionType.cancel,
+        error: const ApiException(message: 'The session changed. Please try again.'),
+      );
 
   void _configureInterceptors() {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final token = await _sessionStorage.readToken();
-          if (token != null && token.isNotEmpty) {
-            options.headers['Authorization'] = 'Bearer $token';
+          if (!options.extra.containsKey(_requestGeneration)) {
+            options.extra[_requestGeneration] = _sessionStorage.generation;
+            final token = await _sessionStorage.readToken();
+            if (token != null && token.isNotEmpty) {
+              options.headers['Authorization'] = 'Bearer $token';
+            }
+          }
+          if (!_isCurrent(options)) return handler.reject(_sessionChanged(options));
+
+          final offlineExpiresAt = _sessionStorage.offlineExpiresAt;
+          if (offlineExpiresAt != null && options.headers['Authorization'] != null) {
+            final expired = !DateTime.now().toUtc().isBefore(offlineExpiresAt);
+            if (expired) _onUnauthorized?.call();
+            if (expired || !_safeRetryMethods.contains(options.method.toUpperCase())) {
+              return handler.reject(DioException(
+                requestOptions: options,
+                error: const ApiException(
+                  message: 'Reconnect and refresh the Garage before making changes.',
+                ),
+              ));
+            }
           }
           handler.next(options);
         },
         onResponse: (response, handler) {
+          if (!_isCurrent(response.requestOptions)) {
+            return handler.reject(_sessionChanged(response.requestOptions));
+          }
           final serverTime = response.headers.value('x-server-time');
           ServerTimeSync.recordFromHeader(serverTime);
           handler.next(response);
         },
         onError: (err, handler) async {
+          if (!_isCurrent(err.requestOptions)) {
+            return handler.next(_sessionChanged(err.requestOptions));
+          }
           final serverTime = err.response?.headers.value('x-server-time');
           ServerTimeSync.recordFromHeader(serverTime);
 
@@ -103,9 +137,15 @@ class ApiClient {
           if (canRetry && attempt < 2 && (isTransientStatus || isTransientNetwork)) {
             await Future<void>.delayed(Duration(milliseconds: 750 * (attempt + 1)));
             final retryOptions = err.requestOptions;
+            if (!_isCurrent(retryOptions)) {
+              return handler.next(_sessionChanged(retryOptions));
+            }
             retryOptions.extra['_retryAttempt'] = attempt + 1;
             try {
               final response = await dio.fetch<dynamic>(retryOptions);
+              if (!_isCurrent(retryOptions)) {
+                return handler.next(_sessionChanged(retryOptions));
+              }
               return handler.resolve(response);
             } catch (retryErr) {
               if (retryErr is DioException) {
@@ -128,6 +168,7 @@ class ApiClient {
   static ApiException mapDioError(Object error) {
     if (error is ApiException) return error;
     if (error is DioException) {
+      if (error.error case final ApiException cause) return cause;
       final response = error.response;
       final status = response?.statusCode;
       final dynamic rawBody = response?.data;

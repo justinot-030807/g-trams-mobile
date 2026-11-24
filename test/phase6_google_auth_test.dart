@@ -35,6 +35,8 @@ class _InMemorySessionStorage extends SecureSessionStorage {
     required String token,
     required String role,
     required Map<String, dynamic> userJson,
+    int? expectedGeneration,
+    bool rotateGeneration = true,
   }) async {
     this.token = token;
     this.role = role;

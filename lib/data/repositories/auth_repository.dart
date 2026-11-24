@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -595,69 +596,137 @@ class AuthRepository {
   }
 
   Future<MobileUser?> restoreSession() async {
+    final generation = _storage.generation;
     final token = await _storage.readToken();
     if (token == null || token.isEmpty) return null;
 
     final cachedJson = await _storage.readUserJson();
-    MobileUser? cachedUser;
-    if (cachedJson != null) {
-      cachedUser = MobileUser.fromJson(cachedJson);
-      if (!cachedUser.isAllowedMobileUser) {
-        await _storage.clearSession();
-        return null;
-      }
+    if (generation != _storage.generation) return null;
+    final cachedUser = cachedJson == null ? null : MobileUser.fromJson(cachedJson);
+    if (cachedUser != null && !cachedUser.isAllowedMobileUser) {
+      await _discardInvalidSession();
+      return null;
     }
 
     try {
-      final res = await _api.dio.get<Map<String, dynamic>>('/auth/profile');
-      if (res.data != null) {
-        final freshUser = MobileUser.fromJson(res.data!);
-        if (!freshUser.isAllowedMobileUser) {
-          await _storage.clearSession();
-          return null;
-        }
-        await _storage.saveSession(
-          token: token,
-          role: freshUser.role,
-          userJson: freshUser.toJson(),
-        );
-        _sendHeartbeatBestEffort();
-        return freshUser;
-      }
-    } catch (e) {
-      final mapped = ApiClient.mapDioError(e);
-      if (mapped.statusCode == 401 || mapped.statusCode == 403) {
-        await _storage.clearSession();
+      final user = await _fetchProfile();
+      if (generation != _storage.generation) return null;
+      _sendHeartbeatBestEffort();
+      return user;
+    } catch (error) {
+      if (generation != _storage.generation) return null;
+      final status = ApiClient.mapDioError(error).statusCode;
+      if (status == 401 || status == 403) {
+        await _discardInvalidSession();
         return null;
       }
-      // Allow offline session continuation when server is temporarily unreachable.
+      if (!_isAvailabilityError(error) ||
+          cachedUser == null ||
+          cachedUser.id.isEmpty) {
+        return null;
+      }
+      final validatedAt = await _storage.readLastValidatedAt();
+      final tokenExpiry = _jwtExpiry(token);
+      final now = DateTime.now().toUtc();
+      if (generation != _storage.generation ||
+          validatedAt == null ||
+          validatedAt.isAfter(now) ||
+          tokenExpiry == null) {
+        return null;
+      }
+      final cacheExpiry = validatedAt.add(const Duration(hours: 24));
+      final expiresAt = cacheExpiry.isBefore(tokenExpiry) ? cacheExpiry : tokenExpiry;
+      if (!now.isBefore(expiresAt)) return null;
+
+      _storage.offlineExpiresAt = expiresAt;
       return cachedUser;
     }
+  }
 
-    return cachedUser;
+  static bool _isAvailabilityError(Object error) {
+    if (error is! DioException) return false;
+    return error.type == DioExceptionType.connectionError ||
+        error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.receiveTimeout ||
+        const {502, 503, 504}.contains(error.response?.statusCode);
+  }
+
+  static DateTime? _jwtExpiry(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3 || parts.any((part) => part.isEmpty)) return null;
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      final exp = payload is Map ? payload['exp'] : null;
+      if (exp is! int || exp <= 0) return null;
+      return DateTime.fromMillisecondsSinceEpoch(exp * 1000, isUtc: true);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  DateTime? get offlineSessionExpiresAt => _storage.offlineExpiresAt;
+
+  Future<void> _discardInvalidSession() async {
+    try {
+      await _storage.clearSession();
+    } catch (_) {
+      debugPrint('Could not remove all invalid G-TRAMS session records.');
+    }
   }
 
   Future<void> logout() async {
     await _storage.clearSession();
   }
 
-  Future<String?> readSessionToken() => _storage.readToken();
+  Future<String?> readSessionToken() async {
+    final generation = _storage.generation;
+    if (offlineSessionExpiresAt != null) return null;
+    final token = await _storage.readToken();
+    return generation == _storage.generation && offlineSessionExpiresAt == null
+        ? token
+        : null;
+  }
 
   Future<MobileUser> fetchProfile() async {
     try {
-      final res = await _api.dio.get<Map<String, dynamic>>('/auth/profile');
-      final freshUser = MobileUser.fromJson(res.data ?? const {});
-      final token = await _storage.readToken();
-      if (token != null && token.isNotEmpty) {
-        await _storage.saveSession(
-          token: token,
-          role: freshUser.role,
-          userJson: freshUser.toJson(),
-        );
-      }
-      return freshUser;
+      return await _fetchProfile();
     } catch (e) {
       throw ApiClient.mapDioError(e);
+    }
+  }
+
+  Future<MobileUser> _fetchProfile() async {
+    final generation = _storage.generation;
+    final token = await _storage.readToken();
+    final storedProfile = await _storage.readUserJson();
+    _requireSessionGeneration(generation);
+    final res = await _api.dio.get<Map<String, dynamic>>('/auth/profile');
+    final freshUser = MobileUser.fromJson(res.data ?? const {});
+    final storedId = storedProfile == null ? '' : MobileUser.fromJson(storedProfile).id;
+    if (!freshUser.isAllowedMobileUser ||
+        freshUser.id.isEmpty ||
+        (storedId.isNotEmpty && storedId != freshUser.id)) {
+      throw const ApiException(message: 'Please sign in again.', statusCode: 403);
+    }
+    if (token != null && token.isNotEmpty) {
+      await _storage.saveSession(
+        token: token,
+        role: freshUser.role,
+        userJson: freshUser.toJson(),
+        expectedGeneration: generation,
+        rotateGeneration: false,
+      );
+    }
+    _requireSessionGeneration(generation);
+    _storage.offlineExpiresAt = null;
+    return freshUser;
+  }
+
+  void _requireSessionGeneration(int generation) {
+    if (generation != _storage.generation) {
+      throw const ApiException(message: 'The session changed. Please try again.');
     }
   }
 
@@ -678,6 +747,7 @@ class AuthRepository {
     String? theme,
     ScannedDocumentAttachment? profilePic,
   }) async {
+    final generation = _storage.generation;
     try {
       final fields = <String, dynamic>{};
       if (name != null) fields['name'] = name.trim();
@@ -733,13 +803,17 @@ class AuthRepository {
 
       final updated = MobileUser.fromJson(res.data ?? const {});
       final token = await _storage.readToken();
+      _requireSessionGeneration(generation);
       if (token != null && token.isNotEmpty) {
         await _storage.saveSession(
           token: token,
           role: updated.role,
           userJson: updated.toJson(),
+          expectedGeneration: generation,
+          rotateGeneration: false,
         );
       }
+      _requireSessionGeneration(generation);
       return updated;
     } catch (e) {
       throw ApiClient.mapDioError(e);
@@ -768,6 +842,7 @@ class AuthRepository {
     required String oldPassword,
     required String newPassword,
   }) async {
+    final generation = _storage.generation;
     try {
       final res = await _api.dio.put<Map<String, dynamic>>(
         '/auth/change-password',
@@ -780,16 +855,20 @@ class AuthRepository {
       final newToken = (data['token'] ?? '').toString().trim();
       final message =
           (data['message'] ?? 'Password changed successfully.').toString();
+      _requireSessionGeneration(generation);
 
       if (newToken.isNotEmpty) {
         final cachedUser = await _storage.readUserJson();
         final cachedRole = await _storage.readRole() ?? 'operator';
+        _requireSessionGeneration(generation);
         if (cachedUser != null) {
           await _storage.saveSession(
             token: newToken,
             role: cachedRole,
             userJson: cachedUser,
+            expectedGeneration: generation,
           );
+          _requireSessionGeneration(generation + 1);
         }
       }
 
@@ -977,7 +1056,7 @@ class AuthRepository {
 
     final user = MobileUser.fromJson(data);
     if (!user.isAllowedMobileUser) {
-      await _storage.clearSession();
+      await _discardInvalidSession();
       throw StaffRoleBlockedException(
         rawRole: user.role,
         displayRole: GasanConstants.blockedRoleDisplayName(user.role),
@@ -989,6 +1068,7 @@ class AuthRepository {
       role: user.role,
       userJson: user.toJson(),
     );
+    _storage.offlineExpiresAt = null;
     _sendHeartbeatBestEffort();
     return user;
   }
