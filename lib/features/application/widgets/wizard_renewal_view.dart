@@ -171,7 +171,7 @@ class WizardRenewalView extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                '${strings.franchiseFeeLabel}: ${ManilaDateFormatter.formatPhp(franchiseFee)} (${strings.pick('Paid at Municipal Cashier after OVM review', 'Babayaran sa Municipal Cashier pagkatapos ng pagsusuri ng OVM')})',
+                '${strings.franchiseFeeLabel}: ${ManilaDateFormatter.formatPhp(franchiseFee)} • ${strings.pick('Paid at Cashier after OVM review', 'Babayaran sa Cashier pagkatapos ng OVM')}',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -179,15 +179,15 @@ class WizardRenewalView extends StatelessWidget {
         ),
         const SizedBox(height: 14),
 
-        // Required Current-Year Cedula (CTC) Scanner + AI OCR
+        // Required Current-Year Cedula (CTC) Scanner + OCR
         DocumentScannerCard(
           title: strings.pick(
             'Current-Year Cedula (CTC)',
             'Cedula (CTC) para sa Kasalukuyang Taon',
           ),
           subtitle: strings.pick(
-            'Scan or upload your latest Community Tax Certificate for AI auto-fill.',
-            'I-scan o i-upload ang bagong Cedula upang awtomatikong mapunan ang detalye.',
+            'Auto-fills serial number, issue date, and place.',
+            'Auto-fill ng serial number, petsa, at lugar.',
           ),
           captureService: captureService,
           strings: strings,
@@ -200,6 +200,7 @@ class WizardRenewalView extends StatelessWidget {
             fieldKey: 'cedulaDoc',
             ocrDocType: 'cedula',
             file: file,
+            isFil: strings.isFil,
           ),
           onRemove: () => controller.removeAttachment('cedulaDoc'),
         ),
@@ -211,11 +212,10 @@ class WizardRenewalView extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                strings.pick(
-                  'COMMUNITY TAX CERTIFICATE (CTC) DETAILS',
-                  'DETALYE NG CEDULA (CTC)',
-                ),
-                style: CivicTheme.monoStyle(fontSize: 10, color: palette.muted),
+                strings.pick('Cedula (CTC) Details', 'Detalye ng Cedula (CTC)'),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontSize: 14.5,
+                    ),
               ),
               const SizedBox(height: 12),
               CivicFieldLabel(
@@ -284,10 +284,10 @@ class WizardRenewalView extends StatelessWidget {
 
         // Optional Updated LTO OR/CR & Driver's License
         DocumentScannerCard(
-          title: strings.pick('Updated LTO OR/CR (Optional)', 'Bagong LTO OR/CR (Opsyonal)'),
+          title: strings.pick('Updated LTO OR/CR', 'Bagong LTO OR/CR'),
           subtitle: strings.pick(
-            'Upload if you renewed your LTO registration this year.',
-            'Mag-upload kung nag-renew ng LTO OR/CR ngayong taon.',
+            'Upload only if renewed with LTO this year.',
+            'I-upload lamang kung nag-renew sa LTO.',
           ),
           captureService: captureService,
           strings: strings,
@@ -297,18 +297,19 @@ class WizardRenewalView extends StatelessWidget {
           ocrFeedback: state.ocrFeedback['orCrDocument'],
           onFileCaptured: (file) => controller.attachAndScanDocument(
             fieldKey: 'orCrDocument',
-            ocrDocType: 'orcr',
+            ocrDocType: 'orCr',
             file: file,
+            isFil: strings.isFil,
           ),
           onRemove: () => controller.removeAttachment('orCrDocument'),
         ),
         const SizedBox(height: 12),
 
         DocumentScannerCard(
-          title: strings.pick("Updated Driver's License (Optional)", "Bagong Driver's License (Opsyonal)"),
+          title: strings.pick("Updated Driver's License", "Bagong Driver's License"),
           subtitle: strings.pick(
-            "Required only if your previous driver's license has expired.",
-            'Kailangan lamang kung nag-expire na ang dating lisensya.',
+            'Upload only if your previous license expired.',
+            'I-upload lamang kung nag-expire ang lisensya.',
           ),
           captureService: captureService,
           strings: strings,
@@ -320,6 +321,7 @@ class WizardRenewalView extends StatelessWidget {
             fieldKey: 'license',
             ocrDocType: 'license',
             file: file,
+            isFil: strings.isFil,
           ),
           onRemove: () => controller.removeAttachment('license'),
         ),
@@ -330,8 +332,10 @@ class WizardRenewalView extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                strings.pick('OPTIONAL RENEWAL METADATA', 'OPSYONAL NA DETALYE NG RENEWAL'),
-                style: CivicTheme.monoStyle(fontSize: 10, color: palette.muted),
+                strings.pick('Optional Document Updates', 'Opsyonal na Update'),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontSize: 14.5,
+                    ),
               ),
               const SizedBox(height: 10),
               CivicFieldLabel(text: strings.pick('LTO OR/CR No.', 'LTO OR/CR No.')),

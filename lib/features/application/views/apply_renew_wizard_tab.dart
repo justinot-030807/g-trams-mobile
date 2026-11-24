@@ -271,23 +271,13 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
         Row(
           children: [
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    draft.mode == WizardFlowMode.renewal
-                        ? strings.wizardRenewTitle
-                        : draft.mode == WizardFlowMode.fixReapply
-                            ? strings.wizardFixTitle
-                            : strings.wizardNewTitle,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    GasanConstants.licensingOfficeName,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+              child: Text(
+                draft.mode == WizardFlowMode.renewal
+                    ? strings.wizardRenewTitle
+                    : draft.mode == WizardFlowMode.fixReapply
+                        ? strings.wizardFixTitle
+                        : strings.wizardNewTitle,
+                style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
             if (draft.mode == WizardFlowMode.fixReapply)
@@ -406,8 +396,8 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
               'Puno na ang Limitasyon ng Unit (${garage.slotOccupyingCount}/${garage.maxUnits})',
             ),
             message: strings.pick(
-              'Municipal Ordinance Section 4 limits each operator to ${garage.maxUnits} active/pending units. You may still renew an eligible franchise or withdraw an unpaid pending application.',
-              'Hanggang ${garage.maxUnits} aktibo o nakabinbing unit lamang ang pinahihintulutan bawat operator sa ilalim ng Municipal Ordinance Section 4.',
+              'Operators may hold up to ${garage.maxUnits} active/pending units. Renew an eligible franchise or withdraw an unpaid pending one.',
+              'Hanggang ${garage.maxUnits} aktibo o nakabinbing unit lamang bawat operator. Maaari kang mag-renew o mag-withdraw ng nakabinbing aplikasyon.',
             ),
           ),
           const SizedBox(height: 12),
@@ -578,14 +568,6 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            strings.pick(
-              'STEP 1 — OPERATOR IDENTITY & TODA JURISDICTION',
-              'HAKBANG 1 — PAGKAKAKILANLAN AT TODA',
-            ),
-            style: CivicTheme.monoStyle(fontSize: 10, color: palette.muted),
-          ),
-          const SizedBox(height: 14),
           CivicFieldLabel(text: strings.fullNameLabel, isRequired: true),
           TextField(
             key: const Key('wizard_fullname_field'),
@@ -637,7 +619,7 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '${strings.pick('Resolved Municipal Route Zone', 'Itinalagang Route Zone')}: ${d.zone.toUpperCase()}',
+                      '${strings.pick('Route Zone', 'Route Zone')}: ${d.zone.toUpperCase()}',
                       style: CivicTheme.monoStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -751,8 +733,8 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
             'LTO Certificate of Registration (CR)',
           ),
           subtitle: strings.pick(
-            'Auto-fills Plate, Motor, Chassis, Make & Year via 3-Tier AI OCR.',
-            'Awtomatikong pinupunan ang Plaka, Motor, Chassis, Taták at Taon.',
+            'Auto-fills Plate, Motor, Chassis, Make & Year.',
+            'Auto-fill ng Plaka, Motor, Chassis, Taták at Taon.',
           ),
           captureService: captureService,
           strings: strings,
@@ -763,8 +745,9 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
           ocrFeedback: wizard.ocrFeedback['crDocument'],
           onFileCaptured: (file) => controller.attachAndScanDocument(
             fieldKey: 'crDocument',
-            ocrDocType: 'cr',
+            ocrDocType: 'orCr',
             file: file,
+            isFil: strings.isFil,
           ),
           onRemove: () => controller.removeAttachment('crDocument'),
         ),
@@ -777,8 +760,8 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
             'LTO Official Receipt (OR)',
           ),
           subtitle: strings.pick(
-            'Latest annual LTO registration receipt (or upload combined OR/CR above).',
-            'Pinakabagong resibo ng rehistro sa LTO (o magkasamang OR/CR).',
+            'Latest LTO receipt, or skip if combined above.',
+            'Pinakabagong resibo ng LTO (opsyonal kung kasama sa taas).',
           ),
           captureService: captureService,
           strings: strings,
@@ -788,8 +771,9 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
           ocrFeedback: wizard.ocrFeedback['orDocument'],
           onFileCaptured: (file) => controller.attachAndScanDocument(
             fieldKey: 'orDocument',
-            ocrDocType: 'or',
+            ocrDocType: 'orCr',
             file: file,
+            isFil: strings.isFil,
           ),
           onRemove: () => controller.removeAttachment('orDocument'),
         ),
@@ -800,13 +784,12 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                strings.pick(
-                  'VEHICLE SPECIFICATIONS (AUTO-FILLED OR MANUAL)',
-                  'DETALYE NG TRICYCLE (AUTO-FILL O MANUAL)',
-                ),
-                style: CivicTheme.monoStyle(fontSize: 10, color: palette.muted),
+                strings.pick('Vehicle Details', 'Detalye ng Tricycle'),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontSize: 14.5,
+                    ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
 
               // Plate Number + Live Unique Check
               CivicFieldLabel(
@@ -1029,8 +1012,8 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
           key: const Key('scanner_card_license'),
           title: strings.pick("Driver's License (Front)", "Driver's License (Harap)"),
           subtitle: strings.pick(
-            'Auto-fills License No., DL Codes (A / A1), and Expiry Date.',
-            'Awtomatikong pinupunan ang License No., DL Codes (A / A1), at Expiry.',
+            'Auto-fills License No., DL Codes, and expiry.',
+            'Auto-fill ng License No., DL Codes, at expiry.',
           ),
           captureService: captureService,
           strings: strings,
@@ -1043,16 +1026,17 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
             fieldKey: 'license',
             ocrDocType: 'license',
             file: file,
+            isFil: strings.isFil,
           ),
           onRemove: () => controller.removeAttachment('license'),
         ),
         const SizedBox(height: 12),
 
         DocumentScannerCard(
-          title: strings.pick("Driver's License (Back — Optional)", "Driver's License (Likod — Opsyonal)"),
+          title: strings.pick("Driver's License (Back)", "Driver's License (Likod)"),
           subtitle: strings.pick(
-            'Captures back serial number and restriction codes.',
-            'Kinokopya ang serial number at restriction codes sa likod.',
+            'Captures back serial number and restrictions.',
+            'Kinokopya ang serial number sa likod.',
           ),
           captureService: captureService,
           strings: strings,
@@ -1064,6 +1048,7 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
             fieldKey: 'licenseBack',
             ocrDocType: 'licenseBack',
             file: file,
+            isFil: strings.isFil,
           ),
           onRemove: () => controller.removeAttachment('licenseBack'),
         ),
@@ -1073,8 +1058,8 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
           key: const Key('scanner_card_brgy'),
           title: strings.pick('Barangay Clearance', 'Barangay Clearance'),
           subtitle: strings.pick(
-            'Issued by your Gasan Barangay Hall. (TODA Endorsement upload is no longer required.)',
-            'Mula sa iyong Barangay Hall sa Gasan. (Hindi na kailangan mag-upload ng TODA Endorsement.)',
+            'Issued by your Gasan Barangay Hall.',
+            'Mula sa iyong Barangay Hall sa Gasan.',
           ),
           captureService: captureService,
           strings: strings,
@@ -1087,6 +1072,7 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
             fieldKey: 'brgyClearance',
             ocrDocType: 'brgyClearance',
             file: file,
+            isFil: strings.isFil,
           ),
           onRemove: () => controller.removeAttachment('brgyClearance'),
         ),
@@ -1097,8 +1083,10 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                strings.pick('DRIVER & CLEARANCE DETAILS', 'DETALYE NG DRIVER AT CLEARANCE'),
-                style: CivicTheme.monoStyle(fontSize: 10, color: palette.muted),
+                strings.pick('Driver & Clearance', 'Driver at Clearance'),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontSize: 14.5,
+                    ),
               ),
               const SizedBox(height: 8),
               SwitchListTile(
@@ -1250,8 +1238,8 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
             'Community Tax Certificate (Cedula)',
           ),
           subtitle: strings.pick(
-            'Auto-fills Cedula Serial No., Date Issued, and Place Issued (RA 10173 compliant).',
-            'Awtomatikong pinupunan ang Cedula Serial No., Petsa, at Lugar ng Pag-isyu.',
+            'Auto-fills CTC Serial No., date, and place issued.',
+            'Auto-fill ng CTC Serial No., petsa, at lugar.',
           ),
           captureService: captureService,
           strings: strings,
@@ -1263,6 +1251,7 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
             fieldKey: 'cedulaDoc',
             ocrDocType: 'cedula',
             file: file,
+            isFil: strings.isFil,
           ),
           onRemove: () => controller.removeAttachment('cedulaDoc'),
         ),
@@ -1273,10 +1262,12 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                strings.pick('CEDULA (CTC) INFORMATION', 'IMPORMASYON NG CEDULA (CTC)'),
-                style: CivicTheme.monoStyle(fontSize: 10, color: palette.muted),
+                strings.pick('Cedula Details', 'Detalye ng Cedula'),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontSize: 14.5,
+                    ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               CivicFieldLabel(
                 text: strings.pick('Cedula Serial / CTC Number', 'Cedula Serial / CTC Number'),
                 isRequired: true,
@@ -1391,8 +1382,10 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                strings.pick('APPLICATION SUMMARY', 'BUOD NG APLIKASYON'),
-                style: CivicTheme.monoStyle(fontSize: 10, color: palette.muted),
+                strings.pick('Application Summary', 'Buod ng Aplikasyon'),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontSize: 14.5,
+                    ),
               ),
               const SizedBox(height: 12),
               _SummaryRow(label: strings.fullNameLabel, value: d.fullName),
@@ -1427,28 +1420,34 @@ class _ApplyRenewWizardTabState extends ConsumerState<ApplyRenewWizardTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                strings.pick('ATTACHED DOCUMENTS CHECKLIST', 'MGA NAKALAKIP NA DOKUMENTO'),
-                style: CivicTheme.monoStyle(fontSize: 10, color: palette.muted),
+                strings.pick('Documents', 'Mga Dokumento'),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontSize: 14.5,
+                    ),
               ),
               const SizedBox(height: 10),
               _DocChecklistRow(
                 label: 'LTO OR / CR',
                 attached: wizard.hasAnyOrCrDoc,
+                rejected: wizard.hasRejectedAttachmentOnStep(1),
                 strings: strings,
               ),
               _DocChecklistRow(
                 label: "Driver's License",
                 attached: wizard.hasLicenseDoc,
+                rejected: wizard.isDocRejected('license'),
                 strings: strings,
               ),
               _DocChecklistRow(
                 label: 'Barangay Clearance',
                 attached: wizard.hasBrgyClearanceDoc,
+                rejected: wizard.isDocRejected('brgyClearance'),
                 strings: strings,
               ),
               _DocChecklistRow(
                 label: 'Community Tax Certificate (Cedula)',
                 attached: wizard.hasCedulaDoc,
+                rejected: wizard.isDocRejected('cedulaDoc'),
                 strings: strings,
                 optional: true,
               ),
@@ -1609,16 +1608,34 @@ class _DocChecklistRow extends StatelessWidget {
     required this.label,
     required this.attached,
     required this.strings,
+    this.rejected = false,
     this.optional = false,
   });
 
   final String label;
   final bool attached;
   final AppStrings strings;
+  final bool rejected;
   final bool optional;
 
   @override
   Widget build(BuildContext context) {
+    final String badgeLabel;
+    final CivicStatusTone badgeTone;
+    if (rejected) {
+      badgeLabel = strings.pick('Wrong Document', 'Mali');
+      badgeTone = CivicStatusTone.danger;
+    } else if (attached) {
+      badgeLabel = strings.pick('Ready', 'Handa');
+      badgeTone = CivicStatusTone.active;
+    } else if (optional) {
+      badgeLabel = strings.pick('Optional', 'Opsyonal');
+      badgeTone = CivicStatusTone.neutral;
+    } else {
+      badgeLabel = strings.pick('Missing', 'Kulang');
+      badgeTone = CivicStatusTone.danger;
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -1630,14 +1647,8 @@ class _DocChecklistRow extends StatelessWidget {
             ),
           ),
           CivicStatusBadge(
-            label: attached
-                ? strings.pick('Ready', 'Handa')
-                : (optional
-                    ? strings.pick('Optional', 'Opsyonal')
-                    : strings.pick('Missing', 'Kulang')),
-            tone: attached
-                ? CivicStatusTone.active
-                : (optional ? CivicStatusTone.neutral : CivicStatusTone.danger),
+            label: badgeLabel,
+            tone: badgeTone,
           ),
         ],
       ),

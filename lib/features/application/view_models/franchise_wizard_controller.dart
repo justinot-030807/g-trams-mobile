@@ -11,17 +11,38 @@ import 'package:gtrams_mobile/data/repositories/franchise_repository.dart';
 import 'package:gtrams_mobile/features/auth/view_models/auth_controller.dart';
 import 'package:gtrams_mobile/features/garage/view_models/garage_controller.dart';
 
-/// Feedback badge displayed on a document card after 3-Tier AI OCR runs.
+/// Classification status of an uploaded document after OCR validation.
+enum OcrFeedbackStatus {
+  /// Document matched the expected official type and key fields were extracted.
+  verified,
+
+  /// Wrong document type, mismatched/invalid image, or unreadable (0 key fields).
+  rejected,
+
+  /// OCR backend service is offline, timed out, or unconfigured (manual fallback).
+  serviceUnavailable,
+}
+
+/// Feedback badge displayed on a document card after OCR validation runs.
 class OcrDocumentFeedback {
   const OcrDocumentFeedback({
-    required this.success,
+    required this.status,
     required this.message,
+    this.title = '',
+    this.detectedDocumentType = '',
     this.appliedFields = const [],
   });
 
-  final bool success;
+  final OcrFeedbackStatus status;
+  final String title;
   final String message;
+  final String detectedDocumentType;
   final List<String> appliedFields;
+
+  bool get success => status == OcrFeedbackStatus.verified;
+  bool get isRejected => status == OcrFeedbackStatus.rejected;
+  bool get isServiceUnavailable =>
+      status == OcrFeedbackStatus.serviceUnavailable;
 }
 
 class FranchiseWizardState {
@@ -55,25 +76,43 @@ class FranchiseWizardState {
 
   bool get isScanningAny => scanningDocKey != null;
 
+  bool isDocRejected(String fieldKey) =>
+      ocrFeedback[fieldKey]?.isRejected == true;
+
+  bool hasValidAttachment(String fieldKey) =>
+      attachments.containsKey(fieldKey) && !isDocRejected(fieldKey);
+
+  bool _hasValidSlotOrExisting(String fieldKey, String existingUrl) {
+    if (isDocRejected(fieldKey)) return false;
+    return attachments.containsKey(fieldKey) || existingUrl.isNotEmpty;
+  }
+
+  bool hasRejectedAttachmentOnStep(int step) {
+    final keys = switch (step) {
+      1 => const ['orCrDocument', 'crDocument', 'orDocument'],
+      2 => const ['license', 'licenseBack', 'brgyClearance'],
+      3 => const ['cedulaDoc'],
+      _ => const <String>[],
+    };
+    return keys.any(isDocRejected);
+  }
+
+  bool get hasAnyRejectedDoc =>
+      ocrFeedback.values.any((fb) => fb.isRejected);
+
   bool get hasAnyOrCrDoc =>
-      attachments.containsKey('orCrDocument') ||
-      attachments.containsKey('crDocument') ||
-      attachments.containsKey('orDocument') ||
-      draft.existingOrCrUrl.isNotEmpty ||
-      draft.existingCrUrl.isNotEmpty ||
-      draft.existingOrUrl.isNotEmpty;
+      _hasValidSlotOrExisting('orCrDocument', draft.existingOrCrUrl) ||
+      _hasValidSlotOrExisting('crDocument', draft.existingCrUrl) ||
+      _hasValidSlotOrExisting('orDocument', draft.existingOrUrl);
 
   bool get hasLicenseDoc =>
-      attachments.containsKey('license') ||
-      draft.existingLicenseUrl.isNotEmpty;
+      _hasValidSlotOrExisting('license', draft.existingLicenseUrl);
 
   bool get hasBrgyClearanceDoc =>
-      attachments.containsKey('brgyClearance') ||
-      draft.existingBrgyClearanceUrl.isNotEmpty;
+      _hasValidSlotOrExisting('brgyClearance', draft.existingBrgyClearanceUrl);
 
   bool get hasCedulaDoc =>
-      attachments.containsKey('cedulaDoc') ||
-      draft.existingCedulaUrl.isNotEmpty;
+      _hasValidSlotOrExisting('cedulaDoc', draft.existingCedulaUrl);
 
   bool get hasDuplicateConflict => uniqueChecks.values.any((c) => !c.isUnique);
 
@@ -338,12 +377,14 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
     }
   }
 
-  /// Attaches a scanned/picked file and runs 3-Tier AI OCR (`POST /franchises/scan-document`).
+  /// Attaches a scanned/picked file and runs OCR validation (`POST /franchises/scan-document`).
   Future<void> attachAndScanDocument({
     required String fieldKey,
     required String ocrDocType,
     required ScannedDocumentAttachment file,
+    bool isFil = false,
   }) async {
+    final canonicalDocType = OcrScanResult.canonicalBackendDocType(ocrDocType);
     final nextAttachments =
         Map<String, ScannedDocumentAttachment>.from(state.attachments)
           ..[fieldKey] = file;
@@ -358,21 +399,47 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
     );
 
     try {
-      final result = await _repo.scanDocument(file: file, docType: ocrDocType);
-      if (!mounted) return;
+      final result = await _repo.scanDocument(
+        file: file,
+        docType: canonicalDocType,
+      );
+      if (!mounted || !identical(state.attachments[fieldKey], file)) return;
 
-      if (result.success && result.data.isNotEmpty) {
-        final outcome = state.draft.applyOcrExtraction(ocrDocType, result.data);
+      if (result.success &&
+          !result.isWrongDocument &&
+          result.isValidDocument &&
+          result.isExpectedDocumentType &&
+          !result.isServiceUnavailable) {
+        final outcome =
+            state.draft.applyOcrExtraction(canonicalDocType, result.data);
+        final isLicenseBack = canonicalDocType == 'licenseBack';
+        if (!isLicenseBack &&
+            result.extractedFieldCount <= 0 &&
+            outcome.appliedFields.isEmpty) {
+          _markDocumentRejected(
+            fieldKey: fieldKey,
+            canonicalDocType: canonicalDocType,
+            result: result,
+            isFil: isFil,
+          );
+          return;
+        }
+
         final updatedDraft = outcome.draft.copyWith(
           savedAt: DateTime.now().toUtc(),
         );
         final updatedFeedback =
             Map<String, OcrDocumentFeedback>.from(state.ocrFeedback)
               ..[fieldKey] = OcrDocumentFeedback(
-                success: true,
+                status: OcrFeedbackStatus.verified,
+                detectedDocumentType: result.detectedDocumentType,
                 message: outcome.appliedFields.isNotEmpty
-                    ? 'AI Auto-Filled: ${outcome.appliedFields.join(', ')}'
-                    : 'Document scanned successfully.',
+                    ? (isFil
+                        ? 'Na-auto-fill: ${outcome.appliedFields.join(', ')}'
+                        : 'Auto-filled: ${outcome.appliedFields.join(', ')}')
+                    : (isFil
+                        ? 'Beripikado ang dokumento.'
+                        : 'Document verified.'),
                 appliedFields: outcome.appliedFields,
               );
 
@@ -384,7 +451,7 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
         _persistDraft(updatedDraft);
 
         // Immediately verify uniqueness if Plate/Motor/Chassis came from OCR
-        if (ocrDocType == 'orcr' || ocrDocType == 'cr' || ocrDocType == 'or') {
+        if (canonicalDocType == 'orCr') {
           if (updatedDraft.plateNo.length >= 3) {
             checkUniqueField('plateNo', updatedDraft.plateNo);
           }
@@ -395,34 +462,155 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
             checkUniqueField('chassisNo', updatedDraft.chassisNo);
           }
         }
-      } else {
+      } else if (result.isServiceUnavailable) {
         final updatedFeedback =
             Map<String, OcrDocumentFeedback>.from(state.ocrFeedback)
               ..[fieldKey] = OcrDocumentFeedback(
-                success: false,
-                message: result.message.isNotEmpty
-                    ? result.message
-                    : 'Document attached. Please verify or enter fields manually below.',
+                status: OcrFeedbackStatus.serviceUnavailable,
+                title: isFil
+                    ? 'Hindi Magamit ang OCR — Suriin Nang Manual'
+                    : 'OCR Unavailable — Verify Manually',
+                message: isFil
+                    ? 'Nakalakip na ang file ngunit pansamantalang hindi magamit ang OCR. Suriin ang larawan at ilagay nang manual ang detalye.'
+                    : 'File attached, but auto-scan is temporarily unavailable. Verify the photo and enter details manually below.',
               );
         state = state.copyWith(
           clearScanning: true,
           ocrFeedback: updatedFeedback,
         );
+      } else {
+        _markDocumentRejected(
+          fieldKey: fieldKey,
+          canonicalDocType: canonicalDocType,
+          result: result,
+          isFil: isFil,
+        );
       }
     } catch (err) {
-      if (!mounted) return;
+      if (!mounted || !identical(state.attachments[fieldKey], file)) return;
       final apiErr = ApiClient.mapDioError(err);
+      if (apiErr.statusCode == 400 || apiErr.statusCode == 422) {
+        final parsed = apiErr.rawData != null
+            ? OcrScanResult.fromJson(
+                apiErr.rawData!,
+                fallbackDocType: canonicalDocType,
+              )
+            : OcrScanResult(
+                success: false,
+                docType: canonicalDocType,
+                isValidDocument: false,
+                isExpectedDocumentType: false,
+                isWrongDocument: true,
+                message: apiErr.message,
+                mismatchReason: apiErr.message,
+              );
+        _markDocumentRejected(
+          fieldKey: fieldKey,
+          canonicalDocType: canonicalDocType,
+          result: parsed,
+          isFil: isFil,
+        );
+        return;
+      }
+
       final updatedFeedback =
           Map<String, OcrDocumentFeedback>.from(state.ocrFeedback)
             ..[fieldKey] = OcrDocumentFeedback(
-              success: false,
-              message:
-                  'File attached (${apiErr.message}). You can enter fields manually below.',
+              status: OcrFeedbackStatus.serviceUnavailable,
+              title: isFil
+                  ? 'Hindi Magamit ang OCR — Suriin Nang Manual'
+                  : 'OCR Unavailable — Verify Manually',
+              message: isFil
+                  ? 'Nakalakip ang file (${apiErr.message}). Suriin ang larawan at ilagay nang manual ang detalye.'
+                  : 'File attached (${apiErr.message}). Verify the photo and enter details manually below.',
             );
       state = state.copyWith(
         clearScanning: true,
         ocrFeedback: updatedFeedback,
       );
+    }
+  }
+
+  void _markDocumentRejected({
+    required String fieldKey,
+    required String canonicalDocType,
+    required OcrScanResult result,
+    required bool isFil,
+  }) {
+    final expectedLabel =
+        _expectedDocumentLabel(fieldKey, canonicalDocType, isFil: isFil);
+    final detected = result.detectedDocumentType.trim();
+    final reason = result.mismatchReason.trim();
+    final reasonLower = reason.toLowerCase();
+
+    final String detailMessage;
+    if (detected.isNotEmpty) {
+      detailMessage = isFil
+          ? 'Maling dokumento o malabo ($detected). Mag-upload ng malinaw na $expectedLabel.'
+          : 'Wrong or unreadable document ($detected). Please upload a clear photo of your $expectedLabel.';
+    } else if (reason.isNotEmpty &&
+        !reasonLower.contains('i-manual') &&
+        !reasonLower.contains('manually')) {
+      final isFilipinoBackendMsg =
+          reasonLower.contains('hindi ito') || reasonLower.contains('mangyaring');
+      if (isFil) {
+        detailMessage = reason;
+      } else if (isFilipinoBackendMsg) {
+        detailMessage =
+            'Wrong or unreadable document. Please upload a clear photo of your $expectedLabel.';
+      } else {
+        detailMessage = reason;
+      }
+    } else {
+      detailMessage = isFil
+          ? 'Maling dokumento o malabo ang larawan. Mag-upload ng malinaw na $expectedLabel.'
+          : 'Wrong or unreadable document. Please upload a clear photo of your $expectedLabel.';
+    }
+
+    final updatedFeedback =
+        Map<String, OcrDocumentFeedback>.from(state.ocrFeedback)
+          ..[fieldKey] = OcrDocumentFeedback(
+            status: OcrFeedbackStatus.rejected,
+            title: isFil
+                ? 'Maling Dokumento'
+                : 'Wrong or Unreadable Document',
+            detectedDocumentType: detected,
+            message: detailMessage,
+          );
+    state = state.copyWith(
+      clearScanning: true,
+      ocrFeedback: updatedFeedback,
+    );
+  }
+
+  static String _expectedDocumentLabel(
+    String fieldKey,
+    String canonicalDocType, {
+    required bool isFil,
+  }) {
+    if (fieldKey == 'crDocument') {
+      return 'LTO Certificate of Registration (CR)';
+    }
+    if (fieldKey == 'orDocument') {
+      return 'LTO Official Receipt (OR)';
+    }
+    switch (canonicalDocType) {
+      case 'orCr':
+        return 'LTO OR/CR';
+      case 'license':
+        return isFil
+            ? "LTO Driver's License (Harap)"
+            : "LTO Driver's License (Front)";
+      case 'licenseBack':
+        return isFil
+            ? "Driver's License (Likod)"
+            : "Driver's License (Back)";
+      case 'brgyClearance':
+        return 'Barangay Clearance';
+      case 'cedula':
+        return 'Community Tax Certificate (Cedula)';
+      default:
+        return isFil ? 'opisyal na dokumento' : 'official document';
     }
   }
 
@@ -465,6 +653,11 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
             : 'Select your TODA Association (or NON-TODA).';
       }
     } else if (step == 1) {
+      if (state.hasRejectedAttachmentOnStep(1)) {
+        return isFil
+            ? 'Palitan o alisin muna ang maling dokumento ng LTO OR/CR bago magpatuloy.'
+            : 'Replace or remove the rejected LTO OR/CR document before continuing.';
+      }
       if (d.plateNo.trim().isEmpty) {
         return isFil
             ? 'Ilagay ang Plate Number o MV File Number.'
@@ -503,10 +696,15 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
       }
       if (!state.hasAnyOrCrDoc) {
         return isFil
-            ? 'Mag-scan o mag-upload ng LTO CR o OR bago magpatuloy.'
-            : 'Scan or upload your LTO CR / OR document before proceeding.';
+            ? 'Mag-scan o mag-upload ng valid na LTO CR o OR bago magpatuloy.'
+            : 'Scan or upload a valid LTO CR / OR document before proceeding.';
       }
     } else if (step == 2) {
+      if (state.hasRejectedAttachmentOnStep(2)) {
+        return isFil
+            ? 'Palitan o alisin muna ang maling dokumento bago magpatuloy.'
+            : 'Replace or remove the rejected document before continuing.';
+      }
       if (!d.isOperatorDriver && d.driverName.trim().length < 2) {
         return isFil
             ? 'Ilagay ang pangalan ng itinalagang driver.'
@@ -526,15 +724,20 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
       }
       if (!state.hasLicenseDoc) {
         return isFil
-            ? "Mag-scan o mag-upload ng Driver's License (Harap)."
-            : "Scan or upload the Driver's License (Front).";
+            ? "Mag-scan o mag-upload ng valid na Driver's License (Harap)."
+            : "Scan or upload a valid Driver's License (Front).";
       }
       if (!state.hasBrgyClearanceDoc) {
         return isFil
-            ? 'Mag-scan o mag-upload ng Barangay Clearance.'
-            : 'Scan or upload your Barangay Clearance.';
+            ? 'Mag-scan o mag-upload ng valid na Barangay Clearance.'
+            : 'Scan or upload a valid Barangay Clearance.';
       }
     } else if (step == 3) {
+      if (state.hasRejectedAttachmentOnStep(3)) {
+        return isFil
+            ? 'Palitan o alisin muna ang maling larawan ng Cedula bago magpatuloy.'
+            : 'Replace or remove the rejected Cedula photo before continuing.';
+      }
       return _validateCedulaFields(d, todayIso, isFil: isFil);
     }
 
@@ -543,6 +746,11 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
 
   /// Validates the Renewal form before calling `PUT /franchises/:id/renew`.
   String? validateRenewal({bool isFil = false}) {
+    if (state.hasAnyRejectedDoc) {
+      return isFil
+          ? 'Palitan o alisin muna ang maling dokumento bago isumite ang renewal.'
+          : 'Replace or remove the rejected document before submitting renewal.';
+    }
     final d = state.draft;
     final todayIso = _todayManilaIso();
     final cedulaErr = _validateCedulaFields(d, todayIso, isFil: isFil);
@@ -590,23 +798,26 @@ class FranchiseWizardController extends StateNotifier<FranchiseWizardState> {
     try {
       final FranchiseRecord saved;
       final d = state.draft;
+      final validAttachments = Map<String, ScannedDocumentAttachment>.fromEntries(
+        state.attachments.entries.where((e) => !state.isDocRejected(e.key)),
+      );
       if (d.mode == WizardFlowMode.renewal) {
         saved = await _repo.renewFranchise(
           franchiseId: d.targetFranchiseId,
           draft: d,
-          attachments: state.attachments,
+          attachments: validAttachments,
         );
       } else if (d.mode == WizardFlowMode.fixReapply &&
           d.targetFranchiseId.isNotEmpty) {
         saved = await _repo.updateFranchiseApplication(
           franchiseId: d.targetFranchiseId,
           draft: d,
-          attachments: state.attachments,
+          attachments: validAttachments,
         );
       } else {
         saved = await _repo.submitNewFranchise(
           draft: d,
-          attachments: state.attachments,
+          attachments: validAttachments,
         );
       }
 

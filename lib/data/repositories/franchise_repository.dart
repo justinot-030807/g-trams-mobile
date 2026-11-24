@@ -174,15 +174,17 @@ class FranchiseRepository {
     }
   }
 
-  /// Runs 3-Tier AI OCR (`POST /api/v1/franchises/scan-document`) and returns
-  /// RA 10173-sanitized extracted fields (graceful fallback if unreadable).
+  /// Runs 3-Tier OCR (`POST /api/v1/franchises/scan-document`) with canonical
+  /// backend `docType` (`orCr`, `license`, `licenseBack`, `brgyClearance`, `cedula`)
+  /// and returns RA 10173-sanitized + validity-checked results.
   Future<OcrScanResult> scanDocument({
     required ScannedDocumentAttachment file,
     required String docType,
   }) async {
     try {
+      final canonicalType = OcrScanResult.canonicalBackendDocType(docType);
       final formData = FormData.fromMap({
-        'docType': docType,
+        'docType': canonicalType,
         'file': MultipartFile.fromBytes(
           file.bytes,
           filename: file.fileName,
@@ -191,7 +193,7 @@ class FranchiseRepository {
           ),
         ),
       });
-      final res = await _api.dio.post<Map<String, dynamic>>(
+      final res = await _api.dio.post<dynamic>(
         '/franchises/scan-document',
         data: formData,
         options: Options(
@@ -199,9 +201,12 @@ class FranchiseRepository {
           receiveTimeout: const Duration(seconds: 60),
         ),
       );
+      final body = res.data is Map
+          ? Map<String, dynamic>.from(res.data as Map)
+          : const <String, dynamic>{};
       return OcrScanResult.fromJson(
-        res.data ?? const {},
-        fallbackDocType: docType,
+        body,
+        fallbackDocType: canonicalType,
       );
     } catch (err) {
       throw ApiClient.mapDioError(err);
