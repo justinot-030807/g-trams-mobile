@@ -58,6 +58,16 @@ class OcrScanResult {
     this.needsManual = false,
     this.message = '',
     this.data = const {},
+    this.isValidDocument = true,
+    this.isExpectedDocumentType = true,
+    this.isWrongDocument = false,
+    this.isServiceUnavailable = false,
+    this.detectedDocumentType = '',
+    this.mismatchReason = '',
+    this.confidence,
+    this.warnings = const [],
+    this.ocrTier = '',
+    this.extractedFieldCount = 0,
   });
 
   final bool success;
@@ -65,6 +75,47 @@ class OcrScanResult {
   final bool needsManual;
   final String message;
   final Map<String, dynamic> data;
+  final bool isValidDocument;
+  final bool isExpectedDocumentType;
+  final bool isWrongDocument;
+  final bool isServiceUnavailable;
+  final String detectedDocumentType;
+  final String mismatchReason;
+  final double? confidence;
+  final List<String> warnings;
+  final String ocrTier;
+  final int extractedFieldCount;
+
+  /// Canonical backend `docType` accepted by `documentVerificationService.js`
+  /// (`orCr`, `license`, `licenseBack`, `brgyClearance`, `cedula`).
+  ///
+  /// The backend checks case-sensitive `docType === 'orCr' || docType === 'crFile'
+  /// || docType === 'orFile'`. Canonicalizing prevents empty Gemini prompts that
+  /// previously bypassed wrong-document classification.
+  static String canonicalBackendDocType(String rawDocType) {
+    final lower = rawDocType.trim().toLowerCase();
+    if (lower == 'licenseback' || lower.contains('licenseback')) {
+      return 'licenseBack';
+    }
+    if (lower == 'license') return 'license';
+    if (lower == 'orcr' ||
+        lower == 'cr' ||
+        lower == 'or' ||
+        lower == 'crfile' ||
+        lower == 'orfile' ||
+        lower == 'crdocument' ||
+        lower == 'ordocument' ||
+        lower == 'orcrdocument') {
+      return 'orCr';
+    }
+    if (lower == 'brgyclearance' || lower.contains('brgy')) {
+      return 'brgyClearance';
+    }
+    if (lower == 'cedula' || lower == 'ceduladoc') {
+      return 'cedula';
+    }
+    return rawDocType.trim();
+  }
 
   /// RA 10173 Data Privacy sanitizer: strictly strips driver blood type,
   /// payment amounts, body measurements, and OCR signatory keys before storage/UI.
@@ -99,19 +150,343 @@ class OcrScanResult {
     return cleaned;
   }
 
+  static bool? _readBoolFlag(
+    Map<String, dynamic> root,
+    Map<String, dynamic> nested,
+    String key,
+  ) {
+    final dynamic val = root.containsKey(key) ? root[key] : nested[key];
+    if (val is bool) return val;
+    if (val is String) {
+      final lower = val.trim().toLowerCase();
+      if (lower == 'true') return true;
+      if (lower == 'false') return false;
+    }
+    return null;
+  }
+
+  static String _readStringField(
+    Map<String, dynamic> root,
+    Map<String, dynamic> nested,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final dynamic v = root[key] ?? nested[key];
+      if (v == null) continue;
+      final s = v.toString().trim();
+      if (s.isNotEmpty) return s;
+    }
+    return '';
+  }
+
+  static double? _parseConfidence(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is num) return raw.toDouble();
+    if (raw is String) return double.tryParse(raw.trim());
+    return null;
+  }
+
+  static List<String> _readWarnings(
+    Map<String, dynamic> root,
+    Map<String, dynamic> nested,
+  ) {
+    final out = <String>[];
+    void collect(dynamic raw) {
+      if (raw is String) {
+        final s = raw.trim();
+        if (s.isNotEmpty && !out.contains(s)) out.add(s);
+      } else if (raw is List) {
+        for (final item in raw) {
+          final s = item?.toString().trim() ?? '';
+          if (s.isNotEmpty && !out.contains(s)) out.add(s);
+        }
+      }
+    }
+
+    collect(root['warning']);
+    collect(root['warnings']);
+    collect(nested['warning']);
+    collect(nested['warnings']);
+    return out;
+  }
+
+  static bool _hasMeaningfulValue(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final v = data[key]?.toString().trim() ?? '';
+      if (v.isEmpty) continue;
+      final upper = v.toUpperCase();
+      if (upper == 'N/A' ||
+          upper == 'NA' ||
+          upper == 'NONE' ||
+          upper == 'NULL' ||
+          upper == 'UNCLEAR' ||
+          upper == 'NOT FOUND' ||
+          upper == 'NOTFOUND' ||
+          upper == 'UNKNOWN' ||
+          upper == 'INVALID' ||
+          upper == '-' ||
+          upper == '--') {
+        continue;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /// Counts how many key domain fields for [docType] were genuinely extracted.
+  static int countKeyFieldsForDocType(
+    String docType,
+    Map<String, dynamic> data,
+  ) {
+    final norm = canonicalBackendDocType(docType).toLowerCase();
+    final List<List<String>> groups;
+    if (norm == 'orcr') {
+      groups = const [
+        ['plateNo', 'plateNumber'],
+        ['motorNo', 'engineNo', 'motorNumber'],
+        ['chassisNo', 'chassisNumber'],
+        ['make', 'series'],
+        ['orCrNo', 'crNo', 'orNo', 'fileNo'],
+      ];
+    } else if (norm == 'license') {
+      groups = const [
+        ['licenseNo', 'driverLicenseNo'],
+        ['driverName', 'fullName'],
+      ];
+    } else if (norm == 'licenseback') {
+      groups = const [
+        ['serialNo', 'driverLicenseSerialNo'],
+        ['dlCodes', 'driverDlCodes'],
+        ['conditions', 'driverConditions'],
+        ['rawText', 'text', 'ocrText'],
+      ];
+    } else if (norm == 'cedula') {
+      groups = const [
+        ['serialNo', 'ctcNo', 'cedulaSerialNo'],
+        ['dateIssued', 'cedulaDate'],
+        ['placeIssued', 'placeOfIssue', 'address', 'cedulaAddress'],
+      ];
+    } else if (norm == 'brgyclearance') {
+      groups = const [
+        ['barangay', 'address'],
+        ['residentName', 'fullName', 'name'],
+        ['clearanceNo', 'brgyClearanceNo'],
+      ];
+    } else {
+      groups = const [];
+    }
+
+    var count = 0;
+    for (final group in groups) {
+      if (_hasMeaningfulValue(data, group)) count++;
+    }
+    return count;
+  }
+
+  static bool _detectedTypeIndicatesMismatch(
+    String detectedType,
+    String canonicalDocType,
+  ) {
+    final lower = detectedType.trim().toLowerCase();
+    if (lower.isEmpty) return false;
+
+    const invalidMarkers = [
+      'invalid',
+      'non-document',
+      'non document',
+      'unrelated',
+      'selfie',
+      'blank',
+      'foreign',
+      'wrong',
+      'mismatch',
+      'uploaded in',
+      'unrecognized',
+    ];
+    if (invalidMarkers.any(lower.contains)) return true;
+
+    final norm = canonicalDocType.toLowerCase();
+    if (norm == 'orcr') {
+      final looksLikeOrCr = lower.contains('registration') ||
+          lower.contains('official receipt') ||
+          lower.contains('or/cr') ||
+          lower.contains('cr/or');
+      if (!looksLikeOrCr &&
+          (lower.contains('license') ||
+              lower.contains('cedula') ||
+              lower.contains('community tax') ||
+              lower.contains('barangay'))) {
+        return true;
+      }
+    } else if (norm == 'license' || norm == 'licenseback') {
+      final looksLikeLicense = lower.contains('license');
+      if (!looksLikeLicense &&
+          (lower.contains('registration') ||
+              lower.contains('official receipt') ||
+              lower.contains('cedula') ||
+              lower.contains('community tax') ||
+              lower.contains('barangay'))) {
+        return true;
+      }
+    } else if (norm == 'cedula') {
+      final looksLikeCedula = lower.contains('cedula') ||
+          lower.contains('community tax') ||
+          lower.contains('ctc');
+      if (!looksLikeCedula &&
+          (lower.contains('license') ||
+              lower.contains('registration') ||
+              lower.contains('official receipt') ||
+              lower.contains('barangay'))) {
+        return true;
+      }
+    } else if (norm == 'brgyclearance') {
+      final looksLikeBrgy =
+          lower.contains('barangay') || lower.contains('clearance');
+      if (!looksLikeBrgy &&
+          (lower.contains('license') ||
+              lower.contains('registration') ||
+              lower.contains('official receipt') ||
+              lower.contains('cedula') ||
+              lower.contains('community tax'))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   factory OcrScanResult.fromJson(
     Map<String, dynamic> json, {
     required String fallbackDocType,
   }) {
+    final canonicalDocType = canonicalBackendDocType(
+      (json['docType'] ?? fallbackDocType).toString(),
+    );
     final rawData = json['data'] is Map
         ? Map<String, dynamic>.from(json['data'] as Map)
-        : <String, dynamic>{};
+        : (json['extractedData'] is Map
+            ? Map<String, dynamic>.from(json['extractedData'] as Map)
+            : <String, dynamic>{});
+    final sanitized = sanitizeOcrData(rawData);
+
+    final rawSuccess = json['success'] == true;
+    final needsManual = _readBoolFlag(json, rawData, 'needsManual') == true;
+    final noKey = _readBoolFlag(json, rawData, 'noKey') == true;
+    final isValidFlag = _readBoolFlag(json, rawData, 'isValidDocument') ??
+        _readBoolFlag(json, rawData, 'isValid');
+    final isExpectedTypeFlag =
+        _readBoolFlag(json, rawData, 'isExpectedDocumentType') ??
+            _readBoolFlag(json, rawData, 'documentTypeValid');
+    final verifiedFlag = _readBoolFlag(json, rawData, 'verified');
+    final mismatchFlag = _readBoolFlag(json, rawData, 'mismatch') == true ||
+        _readBoolFlag(json, rawData, 'wrongDocument') == true;
+
+    final statusStr = _readStringField(json, rawData, const ['status'])
+        .toLowerCase();
+    final detectedType = _readStringField(
+      json,
+      rawData,
+      const ['detectedDocumentType', 'detectedType'],
+    );
+    final ocrTier = _readStringField(json, rawData, const ['ocrTier', 'tier']);
+    final message = _readStringField(
+      json,
+      rawData,
+      const ['message', 'error', 'reason'],
+    );
+    final confidence =
+        _parseConfidence(json['confidence'] ?? rawData['confidence']);
+    final warnings = _readWarnings(json, rawData);
+
+    final normalizedConfidence = confidence == null
+        ? null
+        : (confidence > 1.0 ? confidence / 100.0 : confidence);
+    final isLowConfidence =
+        normalizedConfidence != null && normalizedConfidence < 0.45;
+
+    final combinedText = '$message ${warnings.join(' ')}'.toLowerCase();
+    final isServiceUnavailable = noKey ||
+        statusStr == 'unavailable' ||
+        statusStr == 'service_unavailable' ||
+        combinedText.contains('temporarily unavailable') ||
+        combinedText.contains('service unavailable') ||
+        combinedText.contains('walang gemini_api_key') ||
+        combinedText.contains('no api key') ||
+        combinedText.contains('rate-limited') ||
+        combinedText.contains('rate limit') ||
+        combinedText.contains('timed out');
+
+    final detectedTypeInvalid =
+        _detectedTypeIndicatesMismatch(detectedType, canonicalDocType);
+
+    final messageIndicatesWrong = combinedText.contains('hindi ito valid') ||
+        combinedText.contains('not a valid') ||
+        combinedText.contains('not valid') ||
+        combinedText.contains('wrong document') ||
+        combinedText.contains('maling dokumento') ||
+        combinedText.contains('invalid image') ||
+        combinedText.contains('invalid document') ||
+        combinedText.contains('non-document') ||
+        combinedText.contains('mismatch') ||
+        combinedText.contains('unrelated') ||
+        combinedText.contains('lehitimong kopya') ||
+        combinedText.contains('does not appear to be') ||
+        combinedText.contains('could not be processed');
+
+    final explicitlyInvalid = isValidFlag == false ||
+        isExpectedTypeFlag == false ||
+        verifiedFlag == false ||
+        mismatchFlag ||
+        statusStr == 'wrong_document_type' ||
+        statusStr == 'invalid' ||
+        statusStr == 'rejected' ||
+        statusStr == 'mismatch' ||
+        isLowConfidence ||
+        detectedTypeInvalid ||
+        messageIndicatesWrong;
+
+    final extractedCount =
+        countKeyFieldsForDocType(canonicalDocType, sanitized);
+    final isLicenseBack = canonicalDocType.toLowerCase() == 'licenseback';
+    final hasSufficientData = extractedCount > 0 ||
+        (isLicenseBack &&
+            !explicitlyInvalid &&
+            (isValidFlag == true ||
+                (detectedType.toLowerCase().contains('license') &&
+                    !detectedTypeInvalid) ||
+                (normalizedConfidence != null &&
+                    normalizedConfidence >= 0.5)));
+
+    final isWrongDoc = !isServiceUnavailable &&
+        (explicitlyInvalid || !rawSuccess || !hasSufficientData);
+    final effectiveValid =
+        rawSuccess && !isWrongDoc && !isServiceUnavailable;
+    final effectiveExpectedType =
+        !isWrongDoc && isExpectedTypeFlag != false && !detectedTypeInvalid;
+
+    final mismatchReason = isWrongDoc
+        ? (message.isNotEmpty
+            ? message
+            : (detectedType.isNotEmpty
+                ? 'Detected $detectedType'
+                : (warnings.isNotEmpty ? warnings.first : '')))
+        : '';
+
     return OcrScanResult(
-      success: json['success'] == true,
-      docType: (json['docType'] ?? fallbackDocType).toString(),
-      needsManual: json['needsManual'] == true,
-      message: (json['message'] ?? '').toString().trim(),
-      data: sanitizeOcrData(rawData),
+      success: effectiveValid,
+      docType: canonicalDocType,
+      needsManual: needsManual,
+      message: message,
+      data: sanitized,
+      isValidDocument: effectiveValid,
+      isExpectedDocumentType: effectiveExpectedType,
+      isWrongDocument: isWrongDoc,
+      isServiceUnavailable: isServiceUnavailable,
+      detectedDocumentType: detectedType,
+      mismatchReason: mismatchReason,
+      confidence: confidence,
+      warnings: warnings,
+      ocrTier: ocrTier,
+      extractedFieldCount: extractedCount,
     );
   }
 }
@@ -484,9 +859,10 @@ class FranchiseWizardDraft {
     }
 
     var next = this;
-    final normDoc = docType.toLowerCase();
+    final canonicalDoc = OcrScanResult.canonicalBackendDocType(docType);
+    final normDoc = canonicalDoc.toLowerCase();
 
-    if (normDoc == 'orcr' || normDoc == 'cr' || normDoc == 'or') {
+    if (normDoc == 'orcr') {
       final plate = pickStr(['plateNo', 'plateNumber']).toUpperCase();
       final motor = pickStr(['motorNo', 'engineNo', 'motorNumber']).toUpperCase();
       final chassis = pickStr(['chassisNo', 'chassisNumber']).toUpperCase();
@@ -500,7 +876,7 @@ class FranchiseWizardDraft {
       final year = pickStr(['yearModel', 'year', 'made']);
       final col = pickStr(['color']).toUpperCase();
       final cr = pickStr(['crNo']).toUpperCase();
-      final orNum = pickStr(['orNo']).toUpperCase();
+      final orNum = pickStr(['orNo', 'orCrNo']).toUpperCase();
       final file = pickStr(['fileNo']).toUpperCase();
       final exp = normalizeOcrDate(pickStr(['expiryDate', 'orCrExpiryDate']));
 
@@ -564,7 +940,7 @@ class FranchiseWizardDraft {
     } else if (normDoc == 'brgyclearance') {
       final clrNo = pickStr(['clearanceNo', 'brgyClearanceNo']).toUpperCase();
       final dateStr = normalizeOcrDate(pickStr(['dateIssued', 'brgyClearanceDate']));
-      final rawBrgy = pickStr(['barangay']);
+      final rawBrgy = pickStr(['barangay', 'address']);
       final matchedBrgy = _matchOfficialBarangay(rawBrgy);
       final resolvedZone = matchedBrgy.isNotEmpty
           ? GasanConstants.getZoneForBarangay(matchedBrgy)
@@ -616,7 +992,7 @@ class FranchiseWizardDraft {
     }
 
     final mergedScanned = Map<String, dynamic>.from(next.aiScannedDocs);
-    mergedScanned[docType] = data;
+    mergedScanned[canonicalDoc] = data;
 
     return OcrAutoFillOutcome(
       draft: next.copyWith(aiScannedDocs: mergedScanned),

@@ -8,6 +8,7 @@ import 'package:gtrams_mobile/core/storage/app_preferences.dart';
 import 'package:gtrams_mobile/core/storage/offline_wallet_cache.dart';
 import 'package:gtrams_mobile/core/storage/secure_session_storage.dart';
 import 'package:gtrams_mobile/core/storage/wizard_draft_cache.dart';
+import 'package:gtrams_mobile/core/theme/civic_colors.dart';
 import 'package:gtrams_mobile/core/theme/civic_theme.dart';
 import 'package:gtrams_mobile/data/models/application_wizard_models.dart';
 import 'package:gtrams_mobile/data/models/auth_models.dart';
@@ -17,19 +18,23 @@ import 'package:gtrams_mobile/data/repositories/settings_repository.dart';
 import 'package:gtrams_mobile/features/application/view_models/franchise_wizard_controller.dart';
 import 'package:gtrams_mobile/features/application/views/apply_renew_wizard_tab.dart';
 import 'package:gtrams_mobile/features/garage/view_models/garage_controller.dart';
+import 'package:gtrams_mobile/shared/widgets/civic_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeWizardFranchiseRepo extends FranchiseRepository {
   _FakeWizardFranchiseRepo({
     this.duplicatePlate = false,
-    this.ocrData,
+    this.ocrResponsesByDocType = const {},
+    this.scanError,
     this.units = const [],
   }) : super(apiClient: ApiClient(sessionStorage: SecureSessionStorage()));
 
   final bool duplicatePlate;
-  final Map<String, dynamic>? ocrData;
+  final Map<String, Map<String, dynamic>> ocrResponsesByDocType;
+  final Object? scanError;
   final List<FranchiseRecord> units;
   final List<String> checkedUniqueFields = [];
+  final List<String> scannedDocTypes = [];
   bool submittedNew = false;
   bool submittedRenewal = false;
 
@@ -48,7 +53,9 @@ class _FakeWizardFranchiseRepo extends FranchiseRepository {
       field: field,
       value: value,
       isUnique: !isDup,
-      message: isDup ? 'This Plate Number is already registered to another unit.' : 'Available',
+      message: isDup
+          ? 'This Plate Number is already registered to another unit.'
+          : 'Available',
     );
   }
 
@@ -68,13 +75,24 @@ class _FakeWizardFranchiseRepo extends FranchiseRepository {
     required ScannedDocumentAttachment file,
     required String docType,
   }) async {
+    final canonical = OcrScanResult.canonicalBackendDocType(docType);
+    scannedDocTypes.add(canonical);
+    if (scanError != null) {
+      throw scanError!;
+    }
+    if (ocrResponsesByDocType.containsKey(canonical)) {
+      return OcrScanResult.fromJson(
+        ocrResponsesByDocType[canonical]!,
+        fallbackDocType: canonical,
+      );
+    }
     return OcrScanResult.fromJson(
       {
-        'success': ocrData != null,
-        'docType': docType,
-        'data': ocrData ?? const {},
+        'success': false,
+        'docType': canonical,
+        'data': const <String, dynamic>{},
       },
-      fallbackDocType: docType,
+      fallbackDocType: canonical,
     );
   }
 
@@ -191,18 +209,187 @@ void main() {
     });
   });
 
+  group('OCR Strict Wrong-Document & DocType Validation', () {
+    test('canonicalizes cr/or/orcr variants to backend-expected orCr', () {
+      expect(OcrScanResult.canonicalBackendDocType('cr'), 'orCr');
+      expect(OcrScanResult.canonicalBackendDocType('or'), 'orCr');
+      expect(OcrScanResult.canonicalBackendDocType('orcr'), 'orCr');
+      expect(OcrScanResult.canonicalBackendDocType('crDocument'), 'orCr');
+      expect(OcrScanResult.canonicalBackendDocType('orDocument'), 'orCr');
+      expect(OcrScanResult.canonicalBackendDocType('license'), 'license');
+      expect(OcrScanResult.canonicalBackendDocType('licenseBack'), 'licenseBack');
+      expect(OcrScanResult.canonicalBackendDocType('brgyClearance'), 'brgyClearance');
+      expect(OcrScanResult.canonicalBackendDocType('cedulaDoc'), 'cedula');
+    });
+
+    test('rejects wrong documents flagged by backend OR with 0 key fields extracted', () {
+      // Case 1: Backend explicit mismatch flags inside data
+      final flagged = OcrScanResult.fromJson(
+        {
+          'success': true,
+          'docType': 'orCr',
+          'data': {
+            'isValidDocument': false,
+            'isExpectedDocumentType': false,
+            'detectedDocumentType': 'Non-document or Invalid Image (Selfie/Photo/Blank/Unrelated)',
+            'message': 'Hindi ito valid na opisyal na LTO CR/OR document.',
+          },
+        },
+        fallbackDocType: 'orCr',
+      );
+      expect(flagged.success, isFalse);
+      expect(flagged.isValidDocument, isFalse);
+      expect(flagged.isWrongDocument, isTrue);
+      expect(flagged.isServiceUnavailable, isFalse);
+      expect(flagged.detectedDocumentType, contains('Selfie'));
+
+      // Case 2: Exact franchiseController.js rejection shape (success: false + needsManual: true + rejection message)
+      final controllerRejected = OcrScanResult.fromJson(
+        {
+          'success': false,
+          'docType': 'orCr',
+          'needsManual': true,
+          'message': 'Hindi ito valid na opisyal na LTO CR/OR document. Mangyaring mag-upload ng lehitimong kopya.',
+        },
+        fallbackDocType: 'orCr',
+      );
+      expect(controllerRejected.success, isFalse);
+      expect(controllerRejected.isWrongDocument, isTrue);
+      expect(controllerRejected.isServiceUnavailable, isFalse);
+
+      // Case 3: Backend returns success: true with 0 key fields (hallucinated non-document JSON)
+      final zeroFields = OcrScanResult.fromJson(
+        {
+          'success': true,
+          'docType': 'orCr',
+          'data': {
+            'description': 'A random photo of a motorcycle on the street',
+            'color': 'RED',
+          },
+        },
+        fallbackDocType: 'orCr',
+      );
+      expect(zeroFields.extractedFieldCount, 0);
+      expect(zeroFields.success, isFalse);
+      expect(zeroFields.isWrongDocument, isTrue);
+
+      // Case 4: OR/CR data uploaded into Driver's License slot -> 0 license fields
+      final wrongSlot = OcrScanResult.fromJson(
+        {
+          'success': true,
+          'docType': 'license',
+          'data': {
+            'plateNo': '4528-TC',
+            'motorNo': 'KF51E7890123',
+          },
+        },
+        fallbackDocType: 'license',
+      );
+      expect(wrongSlot.extractedFieldCount, 0);
+      expect(wrongSlot.success, isFalse);
+      expect(wrongSlot.isWrongDocument, isTrue);
+
+      // Case 5: Low confidence or mismatch / verified:false flag
+      final lowConf = OcrScanResult.fromJson(
+        {
+          'success': true,
+          'docType': 'cedula',
+          'verified': false,
+          'confidence': 0.22,
+          'data': {'serialNo': 'CC-123'},
+        },
+        fallbackDocType: 'cedula',
+      );
+      expect(lowConf.success, isFalse);
+      expect(lowConf.isWrongDocument, isTrue);
+
+      // Case 6: licenseBack passes when backend explicitly confirms valid back card, rejects empty/unverified
+      final validBack = OcrScanResult.fromJson(
+        {
+          'success': true,
+          'docType': 'licenseBack',
+          'data': {
+            'isValidDocument': true,
+            'isExpectedDocumentType': true,
+            'detectedDocumentType': "Driver's License (Back)",
+            'conditions': 'None',
+          },
+        },
+        fallbackDocType: 'licenseBack',
+      );
+      expect(validBack.success, isTrue);
+      expect(validBack.isWrongDocument, isFalse);
+
+      final invalidBack = OcrScanResult.fromJson(
+        {
+          'success': true,
+          'docType': 'licenseBack',
+          'data': <String, dynamic>{},
+        },
+        fallbackDocType: 'licenseBack',
+      );
+      expect(invalidBack.success, isFalse);
+      expect(invalidBack.isWrongDocument, isTrue);
+
+      // Case 7: OCR service temporarily unavailable -> amber manual fallback, NOT wrong-document rejection
+      final serviceDown = OcrScanResult.fromJson(
+        {
+          'success': false,
+          'docType': 'orCr',
+          'message': 'AI document scanning service is temporarily unavailable. You can enter details manually.',
+        },
+        fallbackDocType: 'orCr',
+      );
+      expect(serviceDown.success, isFalse);
+      expect(serviceDown.isServiceUnavailable, isTrue);
+      expect(serviceDown.isWrongDocument, isFalse);
+    });
+  });
+
   group('FranchiseWizardController — AI OCR Auto-Fill, Unique Checks & Hive Drafts', () {
     test('auto-fills vehicle specs from CR OCR, runs unique checks, saves & clears Hive draft', () async {
       final draftCache = InMemoryWizardDraftCache();
       final repo = _FakeWizardFranchiseRepo(
-        ocrData: {
-          'plateNo': '4528-tc',
-          'engineNo': 'kf51e7890123',
-          'chassisNo': 'mh1kf5178pk098231',
-          'make': 'HONDA',
-          'series': 'TMX 125 ALPHA',
-          'yearModel': '2024',
-          'expiryDate': '2027-03-31',
+        ocrResponsesByDocType: {
+          'orCr': {
+            'success': true,
+            'docType': 'orCr',
+            'data': {
+              'isValidDocument': true,
+              'isExpectedDocumentType': true,
+              'plateNo': '4528-tc',
+              'engineNo': 'kf51e7890123',
+              'chassisNo': 'mh1kf5178pk098231',
+              'make': 'HONDA',
+              'series': 'TMX 125 ALPHA',
+              'yearModel': '2024',
+              'expiryDate': '2027-03-31',
+            },
+          },
+          'license': {
+            'success': true,
+            'docType': 'license',
+            'data': {
+              'isValidDocument': true,
+              'isExpectedDocumentType': true,
+              'licenseNo': 'D02-14-098231',
+              'driverName': 'DELA CRUZ, JUAN M.',
+              'dlCodes': 'A, A1',
+              'expiryDate': '2028-08-15',
+            },
+          },
+          'brgyClearance': {
+            'success': true,
+            'docType': 'brgyClearance',
+            'data': {
+              'isValidDocument': true,
+              'isExpectedDocumentType': true,
+              'clearanceNo': 'BC-2026-POB-019',
+              'residentName': 'JUAN DELA CRUZ',
+              'barangay': 'Barangay I (Poblacion)',
+              'dateIssued': '2026-04-10',
+            },
+          },
         },
       );
       var garageRefreshed = false;
@@ -214,13 +401,14 @@ void main() {
         onSubmittedRefreshGarage: () async => garageRefreshed = true,
       );
 
-      // Attach & scan CR -> triggers OCR + auto-fill + live unique checks + Hive auto-save
+      // Attach & scan CR -> canonicalizes 'cr' to 'orCr', auto-fills + runs unique checks + Hive auto-save
       await ctrl.attachAndScanDocument(
         fieldKey: 'crDocument',
         ocrDocType: 'cr',
         file: _dummyAttachment,
       );
 
+      expect(repo.scannedDocTypes, contains('orCr'));
       expect(ctrl.state.draft.plateNo, '4528-TC');
       expect(ctrl.state.draft.motorNo, 'KF51E7890123');
       expect(ctrl.state.draft.chassisNo, 'MH1KF5178PK098231');
@@ -253,6 +441,83 @@ void main() {
       expect(repo.submittedNew, isTrue);
       expect(garageRefreshed, isTrue);
       expect(draftCache.readApplyDraft(_testUser.id), isNull);
+    });
+
+    test('blocks step progression on wrong document (mismatch OR 0 extracted fields) and distinguishes 503 OCR outage', () async {
+      final draftCache = InMemoryWizardDraftCache();
+      final wrongDocRepo = _FakeWizardFranchiseRepo(
+        ocrResponsesByDocType: {
+          'orCr': {
+            'success': false,
+            'docType': 'orCr',
+            'needsManual': true,
+            'message': 'Hindi ito valid na opisyal na LTO CR/OR document. Mangyaring mag-upload ng lehitimong kopya.',
+          },
+          'license': {
+            'success': true,
+            'docType': 'license',
+            'data': {'randomNote': 'cat photo'}, // 0 key license fields!
+          },
+        },
+      );
+
+      final ctrl = FranchiseWizardController(
+        franchiseRepository: wrongDocRepo,
+        draftCache: draftCache,
+        user: _testUser,
+      );
+      ctrl.updateDraft(
+        (d) => d.copyWith(
+          plateNo: '4528-TC',
+          make: 'Honda TMX 125',
+          made: '2024',
+          motorNo: 'MTR-99',
+          chassisNo: 'CHS-99',
+        ),
+      );
+
+      // Upload wrong doc to CR -> MUST reject in danger state and NOT satisfy hasAnyOrCrDoc
+      await ctrl.attachAndScanDocument(
+        fieldKey: 'crDocument',
+        ocrDocType: 'orCr',
+        file: _dummyAttachment,
+      );
+      expect(ctrl.state.ocrFeedback['crDocument']?.isRejected, isTrue);
+      expect(ctrl.state.ocrFeedback['crDocument']?.success, isFalse);
+      expect(ctrl.state.hasAnyOrCrDoc, isFalse);
+      expect(ctrl.validateApplicationStep(1), contains('rejected'));
+
+      // Upload 0-field image to Driver's License -> MUST reject and NOT satisfy hasLicenseDoc
+      await ctrl.attachAndScanDocument(
+        fieldKey: 'license',
+        ocrDocType: 'license',
+        file: _dummyAttachment,
+      );
+      expect(ctrl.state.ocrFeedback['license']?.isRejected, isTrue);
+      expect(ctrl.state.hasLicenseDoc, isFalse);
+      expect(ctrl.validateApplicationStep(2), contains('rejected'));
+
+      // Now test 503 OCR service outage -> amber manual fallback keeps file usable
+      final outageRepo = _FakeWizardFranchiseRepo(
+        scanError: const ApiException(
+          statusCode: 503,
+          message: 'OCR service temporarily offline',
+        ),
+      );
+      final outageCtrl = FranchiseWizardController(
+        franchiseRepository: outageRepo,
+        draftCache: draftCache,
+        user: _testUser,
+      );
+      await outageCtrl.attachAndScanDocument(
+        fieldKey: 'crDocument',
+        ocrDocType: 'orCr',
+        file: _dummyAttachment,
+      );
+      expect(outageCtrl.state.ocrFeedback['crDocument']?.isServiceUnavailable, isTrue);
+      expect(outageCtrl.state.ocrFeedback['crDocument']?.isRejected, isFalse);
+      expect(outageCtrl.state.ocrFeedback['crDocument']?.success, isFalse);
+      expect(outageCtrl.state.hasAnyOrCrDoc, isTrue);
     });
 
     test('blocks duplicate Plate No, expired Cedula year, and targets flagged Fix & Reapply step', () async {
@@ -451,5 +716,113 @@ void main() {
       expect(repo.submittedRenewal, isTrue);
       expect(find.text('Renewal Application Submitted!'), findsOneWidget);
     });
+
+    testWidgets(
+      'wrong document (mismatch flag OR 0 extracted fields) displays red danger banner, never green Scanned, and zero sparkle icons',
+      (WidgetTester tester) async {
+        final prefs = await SharedPreferences.getInstance();
+        final walletCache = InMemoryOfflineWalletCache();
+        final draftCache = InMemoryWizardDraftCache();
+        final repo = _FakeWizardFranchiseRepo(
+          ocrResponsesByDocType: {
+            'orCr': {
+              'success': true,
+              'docType': 'orCr',
+              'data': {
+                'isValidDocument': false,
+                'isExpectedDocumentType': false,
+                'detectedDocumentType': 'Selfie / Unrelated Photo',
+              },
+            },
+            'license': {
+              'success': true,
+              'docType': 'license',
+              'data': {
+                'description': 'random blank image with zero license fields',
+              },
+            },
+          },
+        );
+        final settingsRepo = _FakeSettingsRepo();
+
+        final wizardCtrl = FranchiseWizardController(
+          franchiseRepository: repo,
+          draftCache: draftCache,
+          user: _testUser,
+        )..setStep(1);
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              sharedPreferencesProvider.overrideWithValue(prefs),
+              offlineWalletCacheProvider.overrideWithValue(walletCache),
+              wizardDraftCacheProvider.overrideWithValue(draftCache),
+              documentCaptureServiceProvider
+                  .overrideWithValue(DocumentCaptureService()),
+              garageControllerProvider.overrideWith(
+                (ref) => GarageController(
+                  franchiseRepository: repo,
+                  settingsRepository: settingsRepo,
+                  walletCache: walletCache,
+                  user: _testUser,
+                ),
+              ),
+              franchiseWizardControllerProvider
+                  .overrideWith((ref) => wizardCtrl),
+            ],
+            child: MaterialApp(
+              theme: CivicTheme.light(),
+              home: Scaffold(
+                body: ApplyRenewWizardTab(onGoToGarage: () {}),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // 1. Mismatch flag on LTO CR -> red danger banner, never green Scanned!
+        await wizardCtrl.attachAndScanDocument(
+          fieldKey: 'crDocument',
+          ocrDocType: 'orCr',
+          file: _dummyAttachment,
+        );
+        await tester.pumpAndSettle();
+
+        final rejectedBannerFinder =
+            find.byKey(const Key('ocr_feedback_rejected'));
+        expect(rejectedBannerFinder, findsOneWidget);
+        final bannerWidget = tester.widget<CivicBanner>(rejectedBannerFinder);
+        expect(bannerWidget.tone, CivicStatusTone.danger);
+        expect(find.byKey(const Key('ocr_feedback_verified')), findsNothing);
+        expect(find.text('WRONG DOCUMENT'), findsOneWidget);
+        expect(find.text('SCANNED'), findsNothing);
+
+        // 2. Zero extracted fields on Driver's License (even when backend returns success:true) -> red danger banner!
+        wizardCtrl.setStep(2);
+        await tester.pumpAndSettle();
+        await wizardCtrl.attachAndScanDocument(
+          fieldKey: 'license',
+          ocrDocType: 'license',
+          file: _dummyAttachment,
+        );
+        await tester.pumpAndSettle();
+
+        final licenseRejectedFinder =
+            find.byKey(const Key('ocr_feedback_rejected'));
+        expect(licenseRejectedFinder, findsOneWidget);
+        expect(
+          tester.widget<CivicBanner>(licenseRejectedFinder).tone,
+          CivicStatusTone.danger,
+        );
+        expect(find.byKey(const Key('ocr_feedback_verified')), findsNothing);
+        expect(find.text('WRONG DOCUMENT'), findsOneWidget);
+
+        // Zero star / sparkle AI icons anywhere on the screen
+        expect(find.byIcon(Icons.auto_awesome), findsNothing);
+        expect(find.byIcon(Icons.auto_awesome_outlined), findsNothing);
+        expect(find.byIcon(Icons.star), findsNothing);
+        expect(find.byIcon(Icons.star_outline), findsNothing);
+      },
+    );
   });
 }

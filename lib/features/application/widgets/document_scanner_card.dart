@@ -61,18 +61,28 @@ class DocumentScannerCard extends StatelessWidget {
     final palette = context.civic;
     final hasNew = attachment != null;
     final hasExisting = !hasNew && existingUrl.isNotEmpty;
+    final feedback = ocrFeedback;
+    final isRejected = hasNew && feedback?.isRejected == true;
+    final isVerified = hasNew && feedback?.success == true;
+    final isUnavailable = hasNew && feedback?.isServiceUnavailable == true;
 
     final String statusLabel;
     final CivicStatusTone statusTone;
     if (isScanning) {
-      statusLabel = strings.pick('AI Scanning...', 'Nag-i-scan...');
+      statusLabel = strings.pick('Scanning...', 'Sinusuri...');
       statusTone = CivicStatusTone.inProgress;
-    } else if (hasNew && ocrFeedback?.success == true) {
-      statusLabel = strings.pick('AI Auto-Filled', 'Na-auto-fill');
+    } else if (isRejected) {
+      statusLabel = strings.pick('Wrong Document', 'Maling Dokumento');
+      statusTone = CivicStatusTone.danger;
+    } else if (isVerified) {
+      statusLabel = strings.pick('Scanned', 'Na-scan');
       statusTone = CivicStatusTone.active;
+    } else if (isUnavailable) {
+      statusLabel = strings.pick('Verify Manually', 'I-verify');
+      statusTone = CivicStatusTone.inProgress;
     } else if (hasNew) {
       statusLabel = strings.pick('Attached', 'Nakalakip');
-      statusTone = CivicStatusTone.active;
+      statusTone = CivicStatusTone.neutral;
     } else if (hasExisting) {
       statusLabel = strings.pick('On File', 'Naka-save');
       statusTone = CivicStatusTone.active;
@@ -86,6 +96,9 @@ class DocumentScannerCard extends StatelessWidget {
 
     return CivicCard(
       padding: const EdgeInsets.all(14),
+      borderColor: isRejected
+          ? CivicColors.crimsonAlert.withValues(alpha: 0.55)
+          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -102,11 +115,13 @@ class DocumentScannerCard extends StatelessWidget {
                             fontSize: 14.5,
                           ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    if (subtitle.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -122,7 +137,11 @@ class DocumentScannerCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: palette.canvas,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: palette.border),
+                border: Border.all(
+                  color: isRejected
+                      ? CivicColors.crimsonAlert.withValues(alpha: 0.45)
+                      : palette.border,
+                ),
               ),
               child: Row(
                 children: [
@@ -134,6 +153,15 @@ class DocumentScannerCard extends StatelessWidget {
                         width: 52,
                         height: 52,
                         fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          width: 52,
+                          height: 52,
+                          color: palette.surface,
+                          child: Icon(
+                            Icons.image_outlined,
+                            color: palette.muted,
+                          ),
+                        ),
                       ),
                     )
                   else
@@ -206,8 +234,8 @@ class DocumentScannerCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       strings.pick(
-                        'Previously uploaded copy on file. Scan or upload a new file only if replacing it.',
-                        'May naka-save nang dokumento. Mag-scan o mag-upload lamang kung papalitan.',
+                        'Saved on file. Upload again only to replace.',
+                        'Naka-save na. Mag-upload lamang kung papalitan.',
                       ),
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
@@ -225,7 +253,9 @@ class DocumentScannerCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: palette.canvas,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: palette.brandAccent.withValues(alpha: 0.4)),
+                border: Border.all(
+                  color: palette.brandAccent.withValues(alpha: 0.4),
+                ),
               ),
               child: Row(
                 children: [
@@ -241,8 +271,8 @@ class DocumentScannerCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       strings.pick(
-                        'Running 3-Tier AI OCR to auto-fill details...',
-                        'Sinusuri ng 3-Tier AI OCR upang awtomatikong punan ang detalye...',
+                        'Reading document details...',
+                        'Binabasa ang detalye ng dokumento...',
                       ),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: palette.ink,
@@ -253,17 +283,41 @@ class DocumentScannerCard extends StatelessWidget {
                 ],
               ),
             ),
-          ] else if (ocrFeedback != null) ...[
+          ] else if (feedback != null) ...[
             const SizedBox(height: 10),
-            CivicBanner(
-              tone: ocrFeedback!.success
-                  ? CivicStatusTone.active
-                  : CivicStatusTone.inProgress,
-              icon: ocrFeedback!.success
-                  ? Icons.auto_awesome_outlined
-                  : Icons.edit_note_rounded,
-              message: ocrFeedback!.message,
-            ),
+            if (feedback.isRejected)
+              CivicBanner(
+                key: const Key('ocr_feedback_rejected'),
+                tone: CivicStatusTone.danger,
+                icon: Icons.error_outline_rounded,
+                title: feedback.title.isNotEmpty
+                    ? feedback.title
+                    : strings.pick(
+                        'Wrong or Unreadable Document',
+                        'Maling Dokumento o Malabo',
+                      ),
+                message: feedback.message,
+              )
+            else if (feedback.isServiceUnavailable)
+              CivicBanner(
+                key: const Key('ocr_feedback_unavailable'),
+                tone: CivicStatusTone.inProgress,
+                icon: Icons.warning_amber_rounded,
+                title: feedback.title.isNotEmpty
+                    ? feedback.title
+                    : strings.pick(
+                        'OCR Unavailable — Verify Manually',
+                        'Hindi Magamit ang OCR — I-verify',
+                      ),
+                message: feedback.message,
+              )
+            else
+              CivicBanner(
+                key: const Key('ocr_feedback_verified'),
+                tone: CivicStatusTone.active,
+                icon: Icons.check_circle_outline_rounded,
+                message: feedback.message,
+              ),
           ],
 
           const SizedBox(height: 12),
@@ -285,7 +339,7 @@ class DocumentScannerCard extends StatelessWidget {
                           ),
                   icon: const Icon(Icons.document_scanner_outlined, size: 17),
                   label: Text(
-                    strings.pick('Smart Scan', 'Smart Scan'),
+                    strings.pick('Scan', 'I-scan'),
                   ),
                 ),
               if (captureService.supportsDirectCamera)
@@ -300,7 +354,7 @@ class DocumentScannerCard extends StatelessWidget {
                             context,
                             captureService.captureFromCamera,
                           ),
-                  icon: const Icon(Icons.photo_camera_outlined, size: 17),
+                  icon: const Icon(Icons.camera_alt_outlined, size: 17),
                   label: Text(strings.pick('Camera', 'Kamera')),
                 ),
               OutlinedButton.icon(
@@ -316,7 +370,7 @@ class DocumentScannerCard extends StatelessWidget {
                         ),
                 icon: const Icon(Icons.upload_file_outlined, size: 17),
                 label: Text(
-                  strings.pick('Upload Photo / PDF', 'Mag-upload ng File'),
+                  strings.pick('Upload File', 'Mag-upload'),
                 ),
               ),
             ],

@@ -44,22 +44,19 @@ class WizardStepIndicator extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  strings.pick(
-                    'STEP ${currentStep + 1} OF 5 — ${labels[currentStep].toUpperCase()}',
-                    'HAKBANG ${currentStep + 1} SA 5 — ${labels[currentStep].toUpperCase()}',
-                  ),
-                  style: CivicTheme.monoStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: palette.muted,
-                    letterSpacing: 0.5,
-                  ),
+                  labels[currentStep],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: palette.ink,
+                      ),
                 ),
               ),
               Text(
                 '${currentStep + 1}/5',
                 style: CivicTheme.monoStyle(
-                  fontSize: 10.5,
+                  fontSize: 11,
                   fontWeight: FontWeight.w800,
                   color: activeColor,
                 ),
