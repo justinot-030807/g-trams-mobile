@@ -81,7 +81,7 @@ jobs:
         env:
           API_URL: ${{ github.event.inputs.api_base_url || 'https://g-trams-web2.onrender.com' }}
         run: |
-          flutter build apk --release --no-pub \
+          flutter build apk --release \
             --target-platform android-arm,android-arm64 \
             --dart-define=API_BASE_URL="$API_URL"
 
