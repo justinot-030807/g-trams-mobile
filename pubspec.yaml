@@ -44,16 +44,16 @@ flutter:
 flutter_native_splash:
   color: "#F6F5F3"
   color_dark: "#14110F"
-  image: assets/images/gasan-logo.png
+  image: assets/images/gtrams-logo.png
   android_12:
     color: "#F6F5F3"
     color_dark: "#14110F"
-    image: assets/images/gasan-logo.png
+    image: assets/images/gtrams-logo.png
   web: false
 
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/images/gasan-logo.png"
-  adaptive_icon_background: "#9E2A2B"
-  adaptive_icon_foreground: "assets/images/gasan-logo.png"
+  image_path: "assets/images/gtrams-logo.png"
+  adaptive_icon_background: "#7A1B22"
+  adaptive_icon_foreground: "assets/images/gtrams-logo.png"

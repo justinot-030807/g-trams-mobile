@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,8 +10,9 @@ import 'package:gtrams_mobile/core/theme/civic_theme.dart';
 import 'package:gtrams_mobile/features/auth/view_models/auth_controller.dart';
 
 /// Stage-2 animated Civic Ledger splash screen.
-/// Seamlessly continues from the OS native launch screen while bootstrapping
-/// session auth, `Asia/Manila` server time, and system settings.
+/// Seamlessly continues from the OS native launch screen with a 3D coin-flip
+/// transition from the Sangguniang Bayan seal to the official G-TRAMS emblem
+/// while bootstrapping session auth, server time, and system settings.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -20,14 +22,19 @@ class SplashScreen extends ConsumerStatefulWidget {
 
 class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
+  static const _sbSealAsset = 'assets/images/gasan-logo.png';
+  static const _gtramsLogoAsset = 'assets/images/gtrams-logo.png';
+
   late final AnimationController _controller;
-  late final Animation<double> _sealScale;
-  late final Animation<double> _sealOpacity;
-  late final Animation<double> _textOpacity;
-  late final Animation<Offset> _textSlide;
+  late final Animation<double> _entryOpacity;
+  late final Animation<double> _entryScale;
+  late final Animation<double> _flipAngle;
+  late final Animation<double> _wordmarkOpacity;
+  late final Animation<Offset> _wordmarkSlide;
 
   Timer? _slowServerTimer;
   bool _isSlowServer = false;
+  bool _assetsPrecached = false;
   double _progress = 0.18;
 
   @override
@@ -35,39 +42,60 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1150),
+      duration: const Duration(milliseconds: 1650),
     );
 
-    _sealScale = Tween<double>(begin: 0.78, end: 1.0).animate(
+    // Phase A (0-40%): crisp arrival and steady display of the SB seal.
+    _entryOpacity = Tween<double>(begin: 0.25, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.0, 0.65, curve: Curves.easeOutBack),
+        curve: const Interval(0.0, 0.20, curve: Curves.easeOutCubic),
       ),
     );
-    _sealOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+    _entryScale = Tween<double>(begin: 0.92, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.0, 0.45, curve: Curves.easeOut),
+        curve: const Interval(0.0, 0.24, curve: Curves.easeOutExpo),
       ),
     );
-    _textOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+
+    // Phase B (40-75%): smooth 3D coin flip (0 -> pi) revealing G-TRAMS logo.
+    _flipAngle = Tween<double>(begin: 0.0, end: math.pi).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.35, 0.85, curve: Curves.easeOut),
+        curve: const Interval(0.40, 0.75, curve: Curves.easeInOutCubic),
       ),
     );
-    _textSlide = Tween<Offset>(
-      begin: const Offset(0, 0.18),
+
+    // Phase C (65-94%): wordmark and single-line municipal caption settle in.
+    _wordmarkOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.65, 0.94, curve: Curves.easeOutCubic),
+      ),
+    );
+    _wordmarkSlide = Tween<Offset>(
+      begin: const Offset(0, 0.14),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.35, 0.85, curve: Curves.easeOutCubic),
+        curve: const Interval(0.65, 0.94, curve: Curves.easeOutExpo),
       ),
     );
 
     _controller.forward();
     _bootstrapAndNavigate();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_assetsPrecached) {
+      _assetsPrecached = true;
+      precacheImage(const AssetImage(_sbSealAsset), context);
+      precacheImage(const AssetImage(_gtramsLogoAsset), context);
+    }
   }
 
   Future<void> _bootstrapAndNavigate() async {
@@ -77,12 +105,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       }
     });
 
-    Future<void>.delayed(const Duration(milliseconds: 380), () {
-      if (mounted && _progress < 0.58) setState(() => _progress = 0.58);
+    Future<void>.delayed(const Duration(milliseconds: 520), () {
+      if (mounted && _progress < 0.56) setState(() => _progress = 0.56);
+    });
+    Future<void>.delayed(const Duration(milliseconds: 1180), () {
+      if (mounted && _progress < 0.80) setState(() => _progress = 0.80);
     });
 
     final prefs = ref.read(appPreferencesProvider);
-    final minDisplay = Future<void>.delayed(const Duration(milliseconds: 1450));
+    final minDisplay = Future<void>.delayed(const Duration(milliseconds: 1950));
     final bootstrap = ref
         .read(authControllerProvider.notifier)
         .bootstrap(requireBiometricLock: prefs.biometricEnabled);
@@ -116,6 +147,42 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     super.dispose();
   }
 
+  Widget _buildCoinFace({
+    required String assetPath,
+    required CivicPalette palette,
+    required bool isDark,
+    required bool isPrimaryEmblem,
+  }) {
+    return Container(
+      width: 140,
+      height: 140,
+      padding: EdgeInsets.all(isPrimaryEmblem ? 5 : 10),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: palette.surface,
+        border: Border.all(
+          color: CivicColors.gasanGold.withValues(
+            alpha: isPrimaryEmblem ? 0.92 : 0.78,
+          ),
+          width: isPrimaryEmblem ? 2.2 : 1.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.42 : 0.10),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: Image.asset(
+          assetPath,
+          fit: BoxFit.contain,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.civic;
@@ -123,187 +190,207 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     final strings = AppStrings(ref.watch(appPreferencesProvider).language);
     final accentColor =
         isDark ? CivicColors.gasanGold : CivicColors.gasanMaroon;
+    final wordmarkColor =
+        isDark ? CivicColors.darkParchment : CivicColors.gasanMaroonDeep;
 
     return Scaffold(
       backgroundColor: palette.canvas,
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            // Subtle architectural corner hairlines
-            Positioned(
-              top: 24,
-              left: 24,
-              right: 24,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: palette.surface,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: palette.border),
-                    ),
-                    child: Text(
-                      strings.municipalityCaption,
-                      style: CivicTheme.monoStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: palette.muted,
-                        letterSpacing: 1.1,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 3D Coin-Flip Medallion: SB Seal -> G-TRAMS Main Emblem
+                      AnimatedBuilder(
+                        animation: _controller,
+                        builder: (context, _) {
+                          final angle = _flipAngle.value;
+                          final isBackVisible = angle >= (math.pi / 2);
+                          final flipLift = 1.0 + (0.045 * math.sin(angle));
+                          final coinScale = _entryScale.value * flipLift;
+                          final shadowScaleX =
+                              0.32 + (0.68 * math.cos(angle).abs());
 
-            // Centered Seal + Brand Wordmark + Progress Bar
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedBuilder(
-                      animation: _controller,
-                      builder: (context, child) {
-                        return Opacity(
-                          opacity: _sealOpacity.value,
-                          child: Transform.scale(
-                            scale: _sealScale.value,
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: Container(
-                        width: 128,
-                        height: 128,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: palette.surface,
-                          border: Border.all(
-                            color: CivicColors.gasanGold.withValues(alpha: 0.85),
-                            width: 1.8,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(
-                                alpha: isDark ? 0.35 : 0.06,
-                              ),
-                              blurRadius: 24,
-                              offset: const Offset(0, 10),
+                          final coinMatrix = Matrix4.identity()
+                            ..setEntry(3, 2, 0.0018)
+                            ..rotateY(angle);
+
+                          return Opacity(
+                            opacity: _entryOpacity.value,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Transform.scale(
+                                  scale: coinScale,
+                                  child: Transform(
+                                    alignment: Alignment.center,
+                                    transform: coinMatrix,
+                                    child: isBackVisible
+                                        ? Transform(
+                                            alignment: Alignment.center,
+                                            transform: Matrix4.identity()
+                                              ..rotateY(math.pi),
+                                            child: _buildCoinFace(
+                                              assetPath: _gtramsLogoAsset,
+                                              palette: palette,
+                                              isDark: isDark,
+                                              isPrimaryEmblem: true,
+                                            ),
+                                          )
+                                        : _buildCoinFace(
+                                            assetPath: _sbSealAsset,
+                                            palette: palette,
+                                            isDark: isDark,
+                                            isPrimaryEmblem: false,
+                                          ),
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                Transform.scale(
+                                  scaleX: shadowScaleX,
+                                  scaleY: 1.0,
+                                  child: Container(
+                                    width: 84,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(999),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(
+                                            alpha: isDark ? 0.36 : 0.11,
+                                          ),
+                                          blurRadius: 12,
+                                          spreadRadius: 1,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        child: Image.asset(
-                          'assets/images/gasan-logo.png',
-                          fit: BoxFit.contain,
-                        ),
+                          );
+                        },
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    SlideTransition(
-                      position: _textSlide,
-                      child: FadeTransition(
-                        opacity: _textOpacity,
-                        child: Column(
-                          children: [
-                            Text(
-                              strings.appName,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .displaySmall
-                                  ?.copyWith(
-                                    color: accentColor,
-                                    letterSpacing: 6.5,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                            ),
-                            const SizedBox(height: 6),
-                            Container(
-                              width: 44,
-                              height: 3,
-                              decoration: BoxDecoration(
-                                color: CivicColors.gasanGold,
-                                borderRadius: BorderRadius.circular(999),
+                      const SizedBox(height: 22),
+
+                      // Phase C: Bold G-TRAMS wordmark + single-line caption
+                      SlideTransition(
+                        position: _wordmarkSlide,
+                        child: FadeTransition(
+                          opacity: _wordmarkOpacity,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                strings.appName,
+                                maxLines: 1,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .displaySmall
+                                    ?.copyWith(
+                                      color: wordmarkColor,
+                                      letterSpacing: 4.5,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              strings.appFullTitle,
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: palette.muted,
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.4,
-                                  ),
-                            ),
-                            const SizedBox(height: 28),
-                            SizedBox(
-                              width: 184,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(999),
-                                child: TweenAnimationBuilder<double>(
-                                  tween: Tween<double>(end: _progress),
-                                  duration: const Duration(milliseconds: 420),
-                                  curve: Curves.easeOutCubic,
-                                  builder: (context, value, _) {
-                                    return LinearProgressIndicator(
-                                      value: value,
-                                      minHeight: 4,
-                                      backgroundColor: palette.border,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        accentColor,
+                              const SizedBox(height: 8),
+                              Container(
+                                width: 44,
+                                height: 2.5,
+                                decoration: BoxDecoration(
+                                  color: CivicColors.gasanGold,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  'Municipality of Gasan • Marinduque',
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: palette.muted,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.2,
                                       ),
-                                    );
-                                  },
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 250),
-                              child: Text(
-                                _isSlowServer
-                                    ? strings.wakingServer
-                                    : strings.verifyingSession,
-                                key: ValueKey<bool>(_isSlowServer),
-                                textAlign: TextAlign.center,
-                                style: CivicTheme.monoStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: palette.muted,
+                              const SizedBox(height: 28),
+                              SizedBox(
+                                width: 176,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(999),
+                                  child: TweenAnimationBuilder<double>(
+                                    tween: Tween<double>(end: _progress),
+                                    duration: const Duration(milliseconds: 420),
+                                    curve: Curves.easeOutCubic,
+                                    builder: (context, value, _) {
+                                      return LinearProgressIndicator(
+                                        value: value,
+                                        minHeight: 3.5,
+                                        backgroundColor: palette.border,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                          accentColor,
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 12),
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 240),
+                                child: Text(
+                                  _isSlowServer
+                                      ? strings.wakingServer
+                                      : strings.verifyingSession,
+                                  key: ValueKey<bool>(_isSlowServer),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: CivicTheme.monoStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: palette.muted,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
 
-            // Bottom official attribution
-            Positioned(
-              bottom: 20,
-              left: 24,
-              right: 24,
-              child: Text(
-                'OFFICE OF THE MUNICIPAL VICE MAYOR (OVM) • LLSA I',
-                textAlign: TextAlign.center,
-                style: CivicTheme.monoStyle(
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w600,
-                  color: palette.muted.withValues(alpha: 0.8),
-                  letterSpacing: 0.9,
+            // Single-line official attribution — guaranteed never to wrap "I"
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'OVM — LLSA I • Gasan, Marinduque',
+                  maxLines: 1,
+                  softWrap: false,
+                  textAlign: TextAlign.center,
+                  style: CivicTheme.monoStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: palette.muted,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
             ),

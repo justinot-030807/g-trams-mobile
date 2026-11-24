@@ -9,18 +9,16 @@ import 'package:gtrams_mobile/shared/widgets/civic_widgets.dart';
 
 class _OnboardingSlideData {
   const _OnboardingSlideData({
-    required this.badge,
     required this.title,
     required this.body,
     required this.icon,
-    required this.assetPath,
+    this.assetPath,
   });
 
-  final String badge;
   final String title;
   final String body;
   final IconData icon;
-  final String assetPath;
+  final String? assetPath;
 }
 
 /// First-launch 3-slide onboarding experience tailored for Operators & TODA Presidents.
@@ -47,37 +45,94 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     super.dispose();
   }
 
+  Widget _buildSlideEmblem(
+    _OnboardingSlideData slide,
+    CivicPalette palette,
+    bool isDark,
+  ) {
+    final isBrandSeal = slide.assetPath == 'assets/images/gtrams-logo.png';
+
+    return Container(
+      width: 132,
+      height: 132,
+      padding: EdgeInsets.all(isBrandSeal ? 6 : 22),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: palette.surface,
+        border: Border.all(
+          color: CivicColors.gasanGold.withValues(alpha: 0.82),
+          width: 1.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.34 : 0.08),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: slide.assetPath != null
+          ? ClipOval(
+              child: Image.asset(
+                slide.assetPath!,
+                fit: BoxFit.contain,
+              ),
+            )
+          : Center(
+              child: Icon(
+                slide.icon,
+                size: 52,
+                color: palette.brandAccent,
+              ),
+            ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.civic;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final prefs = ref.watch(appPreferencesProvider);
     final strings = AppStrings(prefs.language);
 
     final slides = [
       _OnboardingSlideData(
-        badge: '01 / DIGITAL WALLET',
         title: strings.onboard1Title,
-        body: strings.onboard1Body,
+        body: strings.pick(
+          'Track franchise status, view your MTOP E-Copy, and show your LGU QR ID anytime — even offline.',
+          'Subaybayan ang prangkisa, tingnan ang MTOP E-Copy, at ipakita ang LGU QR ID kahit offline.',
+        ),
         icon: Icons.badge_outlined,
-        assetPath: 'assets/images/gasan-logo.png',
+        assetPath: 'assets/images/gtrams-logo.png',
       ),
       _OnboardingSlideData(
-        badge: '02 / SMART SCANNER',
-        title: strings.onboard2Title,
-        body: strings.onboard2Body,
+        title: strings.pick(
+          'Scan Documents & Auto-Fill',
+          'I-scan ang Dokumento at Auto-Fill',
+        ),
+        body: strings.pick(
+          'Snap your OR/CR, Driver\'s License, and Cedula for faster OVM — LLSA I verification.',
+          'Kunan ang OR/CR, Driver\'s License, at Cedula para mas mabilis ang pagsusuri ng OVM — LLSA I.',
+        ),
         icon: Icons.document_scanner_outlined,
-        assetPath: 'assets/images/tricycle-icon-maroon.png',
+        assetPath: isDark
+            ? 'assets/images/tricycle-icon-gold.png'
+            : 'assets/images/tricycle-icon-maroon.png',
       ),
       _OnboardingSlideData(
-        badge: '03 / TODA & SUPPORT',
         title: strings.onboard3Title,
-        body: strings.onboard3Body,
+        body: strings.pick(
+          'Manage TODA rosters, receive renewal alerts, and message G-TRAMS Support in real time.',
+          'Pamahalaan ang TODA roster, tumanggap ng renewal alert, at mag-chat sa G-TRAMS Support.',
+        ),
         icon: Icons.groups_2_outlined,
         assetPath: 'assets/images/gtrams-logo.png',
       ),
     ];
 
     final isLast = _currentPage == slides.length - 1;
+    final activeDotColor =
+        isDark ? CivicColors.gasanGold : CivicColors.gasanMaroon;
 
     return Scaffold(
       backgroundColor: palette.canvas,
@@ -86,43 +141,47 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           children: [
             // Top bar: EN/FIL switch + Skip
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 16, 6),
+              padding: const EdgeInsets.fromLTRB(20, 12, 16, 4),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  InkWell(
-                    borderRadius: BorderRadius.circular(999),
-                    onTap: () => ref
-                        .read(appPreferencesProvider.notifier)
-                        .toggleLanguage(),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: palette.surface,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: palette.border),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.translate_rounded,
-                            size: 15,
-                            color: palette.brandAccent,
+                  Material(
+                    color: palette.surface,
+                    shape: StadiumBorder(
+                      side: BorderSide(color: palette.border),
+                    ),
+                    child: InkWell(
+                      customBorder: const StadiumBorder(),
+                      onTap: () => ref
+                          .read(appPreferencesProvider.notifier)
+                          .toggleLanguage(),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 48),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            prefs.language == 'fil' ? 'TAGALOG' : 'ENGLISH',
-                            style: CivicTheme.monoStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              color: palette.ink,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.translate_rounded,
+                                size: 16,
+                                color: palette.brandAccent,
+                              ),
+                              const SizedBox(width: 7),
+                              Text(
+                                prefs.language == 'fil' ? 'TAGALOG' : 'ENGLISH',
+                                style: CivicTheme.monoStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: palette.ink,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -142,88 +201,50 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 onPageChanged: (index) => setState(() => _currentPage = index),
                 itemBuilder: (context, index) {
                   final slide = slides[index];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CivicCard(
-                          padding: const EdgeInsets.all(28),
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 28,
+                          vertical: 16,
+                        ),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: (constraints.maxHeight - 32)
+                                .clamp(0.0, double.infinity),
+                          ),
                           child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Container(
-                                width: 112,
-                                height: 112,
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: palette.canvas,
-                                  border: Border.all(
-                                    color: CivicColors.gasanGold
-                                        .withValues(alpha: 0.7),
-                                    width: 1.5,
-                                  ),
-                                ),
-                                child: Image.asset(
-                                  slide.assetPath,
-                                  fit: BoxFit.contain,
-                                ),
+                              _buildSlideEmblem(slide, palette, isDark),
+                              const SizedBox(height: 32),
+                              Text(
+                                slide.title,
+                                textAlign: TextAlign.center,
+                                style:
+                                    Theme.of(context).textTheme.headlineSmall,
                               ),
-                              const SizedBox(height: 18),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: CivicColors.gasanMaroon
-                                      .withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      slide.icon,
-                                      size: 14,
-                                      color: palette.brandAccent,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      slide.badge,
-                                      style: CivicTheme.monoStyle(
-                                        fontSize: 10.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: palette.brandAccent,
+                              const SizedBox(height: 12),
+                              ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(maxWidth: 320),
+                                child: Text(
+                                  slide.body,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: palette.muted,
+                                        height: 1.55,
                                       ),
-                                    ),
-                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 28),
-                        Text(
-                          slide.title,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          slide.body,
-                          textAlign: TextAlign.center,
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: palette.muted,
-                                    height: 1.55,
-                                  ),
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   );
                 },
               ),
@@ -240,13 +261,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       final active = i == _currentPage;
                       return AnimatedContainer(
                         duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOutCubic,
                         margin: const EdgeInsets.symmetric(horizontal: 4),
                         width: active ? 28 : 8,
                         height: 8,
                         decoration: BoxDecoration(
-                          color: active
-                              ? CivicColors.gasanMaroon
-                              : palette.border,
+                          color: active ? activeDotColor : palette.border,
                           borderRadius: BorderRadius.circular(999),
                         ),
                       );

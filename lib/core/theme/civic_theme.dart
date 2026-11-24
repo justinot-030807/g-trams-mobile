@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:gtrams_mobile/core/theme/civic_colors.dart';
 
 /// Builds Light and Dark Material 3 themes implementing "The Civic Ledger".
+/// Tuned with crisp, outdoor-legible mobile font weights across every slot.
 class CivicTheme {
   CivicTheme._();
 
@@ -31,6 +32,20 @@ class CivicTheme {
     );
 
     final textTheme = baseTextTheme.copyWith(
+      displayLarge: baseTextTheme.displayLarge?.copyWith(
+        fontSize: 34,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.8,
+        height: 1.15,
+        color: palette.ink,
+      ),
+      displayMedium: baseTextTheme.displayMedium?.copyWith(
+        fontSize: 30,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.7,
+        height: 1.16,
+        color: palette.ink,
+      ),
       displaySmall: baseTextTheme.displaySmall?.copyWith(
         fontSize: 28,
         fontWeight: FontWeight.w800,
@@ -38,9 +53,23 @@ class CivicTheme {
         height: 1.18,
         color: palette.ink,
       ),
+      headlineLarge: baseTextTheme.headlineLarge?.copyWith(
+        fontSize: 26,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.5,
+        height: 1.2,
+        color: palette.ink,
+      ),
+      headlineMedium: baseTextTheme.headlineMedium?.copyWith(
+        fontSize: 24,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.45,
+        height: 1.22,
+        color: palette.ink,
+      ),
       headlineSmall: baseTextTheme.headlineSmall?.copyWith(
         fontSize: 22,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w800,
         letterSpacing: -0.4,
         height: 1.24,
         color: palette.ink,
@@ -48,37 +77,50 @@ class CivicTheme {
       titleLarge: baseTextTheme.titleLarge?.copyWith(
         fontSize: 18,
         fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
         height: 1.3,
         color: palette.ink,
       ),
       titleMedium: baseTextTheme.titleMedium?.copyWith(
-        fontSize: 15,
-        fontWeight: FontWeight.w600,
+        fontSize: 15.5,
+        fontWeight: FontWeight.w700,
+        height: 1.35,
+        color: palette.ink,
+      ),
+      titleSmall: baseTextTheme.titleSmall?.copyWith(
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
         height: 1.35,
         color: palette.ink,
       ),
       bodyLarge: baseTextTheme.bodyLarge?.copyWith(
-        fontSize: 15,
+        fontSize: 15.5,
         fontWeight: FontWeight.w500,
         height: 1.5,
         color: palette.ink,
       ),
       bodyMedium: baseTextTheme.bodyMedium?.copyWith(
-        fontSize: 14,
-        fontWeight: FontWeight.w400,
+        fontSize: 14.5,
+        fontWeight: FontWeight.w500,
         height: 1.5,
         color: palette.ink,
       ),
       bodySmall: baseTextTheme.bodySmall?.copyWith(
-        fontSize: 12,
+        fontSize: 12.5,
         fontWeight: FontWeight.w500,
         height: 1.45,
         color: palette.muted,
       ),
       labelLarge: baseTextTheme.labelLarge?.copyWith(
-        fontSize: 14,
+        fontSize: 14.5,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.1,
+      ),
+      labelMedium: baseTextTheme.labelMedium?.copyWith(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.2,
+        color: palette.ink,
       ),
       labelSmall: GoogleFonts.jetBrainsMono(
         fontSize: 11,
@@ -131,12 +173,21 @@ class CivicTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark ? CivicColors.obsidianEarth : CivicColors.warmAlabaster,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        hintStyle: textTheme.bodyMedium?.copyWith(color: palette.muted),
+        fillColor:
+            isDark ? CivicColors.obsidianEarth : CivicColors.warmAlabaster,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        hintStyle: textTheme.bodyMedium?.copyWith(
+          color: palette.muted,
+          fontWeight: FontWeight.w500,
+        ),
         labelStyle: textTheme.bodyMedium?.copyWith(
           color: palette.muted,
           fontWeight: FontWeight.w600,
+        ),
+        floatingLabelStyle: textTheme.bodySmall?.copyWith(
+          color: isDark ? CivicColors.gasanGold : CivicColors.gasanMaroon,
+          fontWeight: FontWeight.w700,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -172,8 +223,22 @@ class CivicTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: CivicColors.gasanMaroon,
           foregroundColor: CivicColors.purePaper,
-          disabledBackgroundColor: CivicColors.gasanMaroon.withValues(alpha: 0.45),
+          disabledBackgroundColor:
+              CivicColors.gasanMaroon.withValues(alpha: 0.45),
           disabledForegroundColor: CivicColors.purePaper.withValues(alpha: 0.8),
+          elevation: 0,
+          minimumSize: const Size(double.infinity, 50),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          textStyle: textTheme.labelLarge,
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: CivicColors.gasanMaroon,
+          foregroundColor: CivicColors.purePaper,
           elevation: 0,
           minimumSize: const Size(double.infinity, 50),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -200,7 +265,7 @@ class CivicTheme {
         style: TextButton.styleFrom(
           foregroundColor:
               isDark ? CivicColors.gasanGold : CivicColors.gasanMaroon,
-          minimumSize: const Size(48, 44),
+          minimumSize: const Size(48, 48),
           textStyle: textTheme.labelLarge,
         ),
       ),
@@ -217,7 +282,7 @@ class CivicTheme {
             isDark ? CivicColors.darkStone : CivicColors.inkCharcoal,
         contentTextStyle: textTheme.bodyMedium?.copyWith(
           color: CivicColors.purePaper,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
