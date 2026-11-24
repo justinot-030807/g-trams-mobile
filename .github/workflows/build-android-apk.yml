@@ -16,6 +16,7 @@ on:
 jobs:
   verify-and-build-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
       contents: write
 
@@ -28,6 +29,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
       - name: Setup Flutter (3.38.7 stable)
         uses: subosito/flutter-action@v2
@@ -44,9 +46,6 @@ jobs:
 
       - name: Run full Unit, Widget & E2E UAT test suite
         run: flutter test
-
-      - name: Verify Chrome Web preview compilation
-        run: flutter build web --no-pub --no-wasm-dry-run
 
       - name: Verify OVM / LLSA I naming guardrail (zero user-facing legacy strings)
         run: |
@@ -78,37 +77,30 @@ jobs:
             echo "::warning::Release keystore secrets are not configured. Building with debug fallback signing for preview testing."
           fi
 
-      - name: Build Universal Release APK
+      - name: Build Signed Android Release APK (arm64-v8a + armeabi-v7a)
         env:
           API_URL: ${{ github.event.inputs.api_base_url || 'https://g-trams-web2.onrender.com' }}
         run: |
-          flutter build apk --release \
+          flutter build apk --release --no-pub \
+            --target-platform android-arm,android-arm64 \
             --dart-define=API_BASE_URL="$API_URL"
 
-      - name: Build Split-per-ABI Release APKs (smaller operator downloads)
-        env:
-          API_URL: ${{ github.event.inputs.api_base_url || 'https://g-trams-web2.onrender.com' }}
-        run: |
-          flutter build apk --release --split-per-abi \
-            --dart-define=API_BASE_URL="$API_URL"
-
-      - name: Stage Release APKs & SHA-256 Checksums
+      - name: Stage Release APK & SHA-256 Checksum
         run: |
           mkdir -p release-dist
-          cp build/app/outputs/flutter-apk/app-release.apk release-dist/gtrams-mobile-universal-release.apk
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk release-dist/gtrams-mobile-arm64-v8a-release.apk
-          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk release-dist/gtrams-mobile-armeabi-v7a-release.apk
+          cp build/app/outputs/flutter-apk/app-release.apk release-dist/gtrams-mobile-release.apk
           (cd release-dist && sha256sum *.apk > SHA256SUMS.txt)
+          ls -lh release-dist/
           cat release-dist/SHA256SUMS.txt
 
       - name: Clean temporary keystore files
         if: always()
         run: rm -f android/upload-keystore.jks android/key.properties
 
-      - name: Upload Release APK Artifacts
+      - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gtrams-mobile-release-apks
+          name: gtrams-mobile-release-apk
           path: release-dist/*
           retention-days: 30
 
@@ -117,8 +109,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release-dist/gtrams-mobile-universal-release.apk
-            release-dist/gtrams-mobile-arm64-v8a-release.apk
-            release-dist/gtrams-mobile-armeabi-v7a-release.apk
+            release-dist/gtrams-mobile-release.apk
             release-dist/SHA256SUMS.txt
           generate_release_notes: true

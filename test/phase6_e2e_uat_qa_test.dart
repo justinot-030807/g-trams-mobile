@@ -651,8 +651,9 @@ void main() {
         // GitHub Actions release pipeline checks
         final ci = File('.github/workflows/build-android-apk.yml').readAsStringSync();
         expect(ci.contains('ANDROID_KEYSTORE_BASE64'), isTrue);
-        expect(ci.contains('--split-per-abi'), isTrue);
+        expect(ci.contains('gtrams-mobile-release.apk'), isTrue);
         expect(ci.contains('SHA256SUMS.txt'), isTrue);
+        expect(ci.contains('timeout-minutes:'), isTrue);
       },
     );
   });
